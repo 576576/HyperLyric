@@ -30,13 +30,10 @@ internal object IslandSlotRuntimeConfigReader {
         )
         val minIslandWidth = SuperIslandWidthPolicy.minIslandWidth(showAlbum, showRhythm)
         val maxIslandWidth = SuperIslandWidthPolicy.maxIslandWidth(showRhythm)
-        val fixedIslandWidth = SuperIslandWidthPolicy.normalizeIslandWidth(
-            islandWidth = prefs.getInt(
-                RootConstants.KEY_HOOK_ISLAND_RIGHT_CONTENT_MAX_WIDTH,
-                RootConstants.DEFAULT_HOOK_ISLAND_RIGHT_CONTENT_MAX_WIDTH
-            ),
-            showAlbum = showAlbum,
-            showRhythm = showRhythm
+        // 直接读取保存值，允许超出滑条范围的宽度生效
+        val fixedIslandWidth = prefs.getInt(
+            RootConstants.KEY_HOOK_ISLAND_RIGHT_CONTENT_MAX_WIDTH,
+            RootConstants.DEFAULT_HOOK_ISLAND_RIGHT_CONTENT_MAX_WIDTH
         )
         val widthMode = prefs.getInt(
             RootConstants.KEY_HOOK_ISLAND_WIDTH_MODE,

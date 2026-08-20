@@ -141,13 +141,10 @@ fun SuperIslandSettingsPage() {
     }
     var islandWidth by remember {
         mutableIntStateOf(
-            SuperIslandWidthPolicy.normalizeIslandWidth(
-                islandWidth = prefs.getInt(
-                    RootConstants.KEY_HOOK_ISLAND_RIGHT_CONTENT_MAX_WIDTH,
-                    RootConstants.DEFAULT_HOOK_ISLAND_RIGHT_CONTENT_MAX_WIDTH
-                ),
-                showAlbum = audioCover,
-                showRhythm = audioRhythm
+            // 直接读取保存值，不再钳制到滑条范围
+            prefs.getInt(
+                RootConstants.KEY_HOOK_ISLAND_RIGHT_CONTENT_MAX_WIDTH,
+                RootConstants.DEFAULT_HOOK_ISLAND_RIGHT_CONTENT_MAX_WIDTH
             )
         )
     }
@@ -270,16 +267,9 @@ fun SuperIslandSettingsPage() {
         }
     }
 
-    fun commitIslandWidth(
-        value: Int,
-        showAlbum: Boolean = audioCover,
-        showRhythm: Boolean = audioRhythm
-    ) {
-        islandWidth = SuperIslandWidthPolicy.normalizeIslandWidth(
-            islandWidth = value,
-            showAlbum = showAlbum,
-            showRhythm = showRhythm
-        )
+    fun commitIslandWidth(value: Int) {
+        // 不再限制输入宽度，允许超出滑条范围的值
+        islandWidth = value
         saveConfig(RootConstants.KEY_HOOK_ISLAND_RIGHT_CONTENT_MAX_WIDTH, islandWidth)
     }
 
@@ -290,7 +280,7 @@ fun SuperIslandSettingsPage() {
             showRhythm = showRhythm
         )
         if (normalizedWidth != islandWidth) {
-            commitIslandWidth(normalizedWidth, showAlbum, showRhythm)
+            commitIslandWidth(normalizedWidth)
         }
     }
 
@@ -422,8 +412,9 @@ fun SuperIslandSettingsPage() {
                 islandWidthMax
             ),
             initialValue = islandWidth,
-            min = islandWidthMin,
-            max = islandWidthMax,
+            // 去除数字输入限制（滑条范围保持不变）
+            min = Int.MIN_VALUE,
+            max = Int.MAX_VALUE,
             onDismiss = { showIslandWidthDialog = false },
             onConfirm = { commitIslandWidth(it) }
         )
@@ -538,7 +529,9 @@ fun SuperIslandSettingsPage() {
                                         )
                                     } else {
                                         Slider(
-                                            value = islandWidth.toFloat(),
+                                            // 滑条范围保持不变，仅将显示值钳制到范围内
+                                            value = islandWidth.toFloat()
+                                                .coerceIn(islandWidthMin.toFloat(), islandWidthMax.toFloat()),
                                             onValueChange = {
                                                 islandWidth = it.roundToInt()
                                                     .coerceIn(islandWidthMin, islandWidthMax)
