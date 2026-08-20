@@ -11,6 +11,7 @@ on:
       - "gradle/**"
       - "gradlew"
       - "gradlew.bat"
+  workflow_dispatch:
 
 concurrency:
   group: preview-release
@@ -24,9 +25,10 @@ jobs:
   build_and_prerelease:
     name: Build and Publish Preview
     if: |
-      !startsWith(github.event.head_commit.message, 'chore: bump version') &&
-      !startsWith(github.event.head_commit.message, 'chore(release)') &&
-      !contains(github.event.head_commit.message, '[skip preview]')
+      github.event_name == 'workflow_dispatch' ||
+      (!startsWith(github.event.head_commit.message, 'chore: bump version') &&
+       !startsWith(github.event.head_commit.message, 'chore(release)') &&
+       !contains(github.event.head_commit.message, '[skip preview]'))
     runs-on: ubuntu-latest
 
     steps:
