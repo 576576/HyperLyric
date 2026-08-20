@@ -1,0 +1,203 @@
+name: Nightly Build
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-build
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  packages: read
+
+jobs:
+  build_prerelease:
+    name: Build and Publish Nightly
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 拉取代码 Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: 读取版本和 Nightly 标识 Read Version and Nightly Metadata
+        id: metadata
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION_NAME="$(sed -n 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n 1)"
+          VERSION_CODE="$(sed -n 's/^[[:space:]]*versionCode[[:space:]]*=[[:space:]]*\([0-9][0-9]*\).*/\1/p' app/build.gradle.kts | head -n 1)"
+          SHORT_SHA="$(git rev-parse --short=7 HEAD)"
+
+          if [[ -z "$VERSION_NAME" || -z "$VERSION_CODE" ]]; then
+            echo '::error::无法从 app/build.gradle.kts 读取 versionName 或 versionCode'
+            exit 1
+          fi
+
+          if [[ ! "$VERSION_NAME" =~ ^[0-9A-Za-z][0-9A-Za-z._-]*$ ]]; then
+            echo "::error::versionName 含有不能用于 Tag 的字符: $VERSION_NAME"
+            exit 1
+          fi
+
+          NIGHTLY_TAG="${VERSION_CODE}-${VERSION_NAME}-nightly-${SHORT_SHA}"
+
+          if ! PREVIOUS_STABLE_TAG="$(gh release list \
+            --repo "$GITHUB_REPOSITORY" \
+            --exclude-drafts \
+            --exclude-pre-releases \
+            --limit 1 \
+            --json tagName \
+            --jq '.[0].tagName // empty' 2>/dev/null)"; then
+            echo '::warning::无法读取上一个正式版 Tag，将使用仓库历史生成更新日志'
+            PREVIOUS_STABLE_TAG=""
+          fi
+
+          {
+            echo "version_name=$VERSION_NAME"
+            echo "version_code=$VERSION_CODE"
+            echo "short_sha=$SHORT_SHA"
+            echo "tag=$NIGHTLY_TAG"
+            echo "previous_stable_tag=$PREVIOUS_STABLE_TAG"
+            echo "release_url=https://github.com/${GITHUB_REPOSITORY}/releases/tag/${NIGHTLY_TAG}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: 生成提交输入 Generate Commit Input
+        env:
+          PREVIOUS_STABLE_TAG: ${{ steps.metadata.outputs.previous_stable_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -n "$PREVIOUS_STABLE_TAG" ]]; then
+            git log --no-merges "$PREVIOUS_STABLE_TAG..HEAD" \
+              --pretty=format:'- %s (%h)' -- \
+              app build.gradle.kts settings.gradle.kts gradle.properties \
+              gradle gradlew gradlew.bat > nightly-commit-input.md
+          else
+            git log --no-merges -n 20 HEAD \
+              --pretty=format:'- %s (%h)' -- \
+              app build.gradle.kts settings.gradle.kts gradle.properties \
+              gradle gradlew gradlew.bat > nightly-commit-input.md
+          fi
+
+          if [[ ! -s nightly-commit-input.md ]]; then
+            printf '%s\n' '- 本次没有检测到新的提交。' > nightly-commit-input.md
+          fi
+
+          head -n 20 nightly-commit-input.md > nightly-commit-input-limited.md
+          mv nightly-commit-input-limited.md nightly-commit-input.md
+
+      - name: 生成 Nightly 中文更新日志 Generate Nightly Chinese Changelog
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          {
+            echo '## 更新日志'
+            cat nightly-commit-input.md
+          } > nightly-notes-zh.md
+
+      - name: 安装 JDK Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: 安装 Android SDK Setup Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          api-level: 37
+          build-tools: '36.0.0'
+
+      - name: 配置 Gradle Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: wrapper
+          cache-read-only: false
+
+      - name: 授权脚本 Grant Permission
+        run: chmod +x ./gradlew
+
+      - name: 构建 Offline Nightly APK Build
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./gradlew assembleOfflineRelease -Pnightly=true --build-cache
+
+      - name: 定位 Offline APK Locate Offline APK
+        id: apk
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mapfile -t files < <(find app/build/outputs/apk/offline/release -maxdepth 1 -type f -name '*.apk' -print | sort)
+          if [[ "${#files[@]}" -ne 1 ]]; then
+            echo "::error::Offline APK 数量不是 1，实际为 ${#files[@]}"
+            printf '%s\n' "${files[@]}"
+            exit 1
+          fi
+
+          APK_IN="${files[0]}"
+          APK_OUT="$GITHUB_WORKSPACE/HyperLyric-nightly-offline-${{ steps.metadata.outputs.tag }}.apk"
+          cp "$APK_IN" "$APK_OUT"
+          echo "apk_path=$APK_OUT" >> "$GITHUB_OUTPUT"
+
+      - name: 生成 Pre-release 说明 Generate Release Notes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          {
+            echo '## 自动构建的每日最新版'
+            echo
+            echo '此版本由 Nightly 手动构建，使用独立包名，仅用于测试和反馈。'
+            echo
+            echo '## 更新日志'
+            cat nightly-notes-zh.md
+          } > nightly-release-body.md
+
+      - name: 删除旧 Nightly Release 和 Tag Delete Previous Nightly
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CURRENT_TAG: ${{ steps.metadata.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          LATEST_NIGHTLY_TAG="$(gh release list \
+            --repo "$GITHUB_REPOSITORY" \
+            --exclude-drafts \
+            --limit 100 \
+            --json tagName,isPrerelease,publishedAt \
+            --jq '[.[] | select(.isPrerelease) | select(.tagName | contains("-nightly-"))] | sort_by(.publishedAt) | reverse | .[0].tagName // empty')"
+          if [[ -n "$LATEST_NIGHTLY_TAG" && "$LATEST_NIGHTLY_TAG" != "$CURRENT_TAG" ]]; then
+            if gh release view "$LATEST_NIGHTLY_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              gh release delete "$LATEST_NIGHTLY_TAG" --repo "$GITHUB_REPOSITORY" --yes
+            else
+              echo 'No previous Nightly Release found; continue with Tag cleanup.'
+            fi
+
+            git push origin --delete "$LATEST_NIGHTLY_TAG"
+          else
+            echo 'No previous Nightly Release to delete.'
+          fi
+
+      - name: 创建 GitHub Pre-release Create Pre-release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.metadata.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ steps.metadata.outputs.tag }}
+          body_path: nightly-release-body.md
+          draft: false
+          prerelease: true
+          generate_release_notes: false
+          files: |
+            HyperLyric-nightly-offline-${{ steps.metadata.outputs.tag }}.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

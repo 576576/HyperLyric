@@ -10,7 +10,12 @@ android {
     namespace = "com.lidesheng.hyperlyric"
     compileSdk = 37
     defaultConfig {
-        applicationId = "com.lidesheng.hyperlyric"
+        // Nightly 构建（-Pnightly=true）使用独立包名，与原版区分开
+        applicationId = if (project.findProperty("nightly") == "true") {
+            "com.lidesheng.hyperlyric.nightly"
+        } else {
+            "com.lidesheng.hyperlyric"
+        }
         minSdk = 33
         targetSdk = 37
         versionCode = 1937
