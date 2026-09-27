@@ -408,6 +408,9 @@ class HookEntry : XposedModule() {
         StatusBarTextColorHooker.setTextColorChangedListener {
             SystemUiLyricRenderer.updateTextColors()
         }
+        StatusBarTextColorHooker.setBackgroundToneChangedListener {
+            StatusBarLyricRenderer.updateCoverPaletteForBackgroundChange()
+        }
         StatusBarTextColorHooker.hook(this, classLoader)
         StatusBarLyricHooker.hook(this, classLoader)
     }

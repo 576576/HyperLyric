@@ -7,6 +7,7 @@ import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
 import com.lidesheng.hyperlyric.common.LyricTypePreference
+import com.lidesheng.hyperlyric.common.LyricTextColorStylePolicy
 import com.lidesheng.hyperlyric.common.RootConstants
 import com.lidesheng.hyperlyric.common.StatusBarLyricPreferences
 import com.lidesheng.hyperlyric.root.HookEntry
@@ -158,6 +159,23 @@ internal object StatusBarLyricRenderer {
             }
             StatusBarLyricHostRegistry.liveHosts().forEach { host ->
                 host.refreshTextStyle(prefs)
+            }
+        }
+    }
+
+    /** Refreshes cover palettes only after SystemUI settles on the opposite status-bar tint mode. */
+    fun updateCoverPaletteForBackgroundChange() {
+        runOnMain {
+            val prefs = HookEntry.instance?.prefs ?: return@runOnMain
+            if (!LyricTypePreference.isEnabled(prefs, RootConstants.LYRIC_TYPE_STATUS_BAR)) {
+                return@runOnMain
+            }
+            val lyricPrefs = StatusBarLyricPreferences.scoped(prefs)
+            val style = StatusBarLyricPreferences.effectiveStatusBarTextColorStyle(lyricPrefs)
+            if (!LyricTextColorStylePolicy.usesCoverColor(style)) return@runOnMain
+
+            StatusBarLyricHostRegistry.liveHosts().forEach { host ->
+                host.refreshTextStyle(prefs, forceStyle = false)
             }
         }
     }

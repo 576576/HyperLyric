@@ -23,10 +23,12 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * Reads the status-bar tint computed by SystemUI's DarkIconDispatcher.
  *
- * The captured color is consumed only by HyperLyric's injected island lyric views.
+ * The captured color and settled tint mode are consumed by HyperLyric's injected lyric views.
  */
 internal object StatusBarTextColorHooker {
     private const val TAG = "StatusBarTextColorHooker"
+    private const val MAX_DARK_INTENSITY_FOR_DARK_BACKGROUND = 0.05f
+    private const val MIN_DARK_INTENSITY_FOR_LIGHT_BACKGROUND = 0.95f
     private const val DISPATCHER_CLASS =
         "com.android.systemui.statusbar.phone.DarkIconDispatcherImpl"
     private const val RECEIVER_CLASS =
@@ -49,6 +51,11 @@ internal object StatusBarTextColorHooker {
         }
         if (textColor != color) scheduleDispatch()
     }
+    private val backgroundToneDispatchScheduled = AtomicBoolean(false)
+    private val backgroundToneDispatch = Runnable {
+        backgroundToneDispatchScheduled.set(false)
+        backgroundToneChangedListener?.invoke()
+    }
 
     @Volatile
     private var textColor = Color.WHITE
@@ -61,6 +68,12 @@ internal object StatusBarTextColorHooker {
 
     @Volatile
     private var textColorChangedListener: (() -> Unit)? = null
+
+    @Volatile
+    private var backgroundToneChangedListener: (() -> Unit)? = null
+
+    @Volatile
+    private var backgroundIsDark = true
 
     @Volatile
     private var tintAreas: List<Rect> = emptyList()
@@ -98,6 +111,10 @@ internal object StatusBarTextColorHooker {
         }
     }
 
+    fun setBackgroundToneChangedListener(listener: (() -> Unit)?) {
+        backgroundToneChangedListener = listener
+    }
+
     fun hook(module: XposedModule, classLoader: ClassLoader) {
         if (hookDispatcher(module, classLoader)) {
             HookLogger.d(TAG, "状态栏颜色源已初始化: source=DarkIconDispatcherImpl")
@@ -107,6 +124,8 @@ internal object StatusBarTextColorHooker {
     }
 
     fun currentTextColor(): Int = textColor
+
+    fun currentBackgroundIsDark(): Boolean = backgroundIsDark
 
     /**
      * Returns the native dispatcher only for the API 102 handoff.  Its old receiver is removed
@@ -147,7 +166,9 @@ internal object StatusBarTextColorHooker {
         }
         followStatusBarEnabled = false
         textColorChangedListener = null
+        backgroundToneChangedListener = null
         mainHandler.removeCallbacksAndMessages(null)
+        backgroundToneDispatchScheduled.set(false)
         runCatching { Choreographer.getInstance().removeFrameCallback(frameCallback) }
         frameScheduled.set(false)
         activeDispatcher = null
@@ -331,6 +352,28 @@ internal object StatusBarTextColorHooker {
             else -> lightModeIconColor
         }
         updateTextColor(color)
+        updateBackgroundTone(centerCovered)
+    }
+
+    /**
+     * Uses SystemUI's resolved icon mode as the palette selector. During its tint animation,
+     * keep the last settled palette until the dispatcher is close to either endpoint.
+     */
+    private fun updateBackgroundTone(darkIconAreaCoversCenter: Boolean) {
+        val nextBackgroundIsDark = when {
+            !darkIconAreaCoversCenter -> true
+            darkIntensity <= MAX_DARK_INTENSITY_FOR_DARK_BACKGROUND -> true
+            darkIntensity >= MIN_DARK_INTENSITY_FOR_LIGHT_BACKGROUND -> false
+            else -> return
+        }
+        if (backgroundIsDark == nextBackgroundIsDark) return
+
+        backgroundIsDark = nextBackgroundIsDark
+        if (backgroundToneChangedListener != null &&
+            backgroundToneDispatchScheduled.compareAndSet(false, true)
+        ) {
+            mainHandler.post(backgroundToneDispatch)
+        }
     }
 
     private fun updateTextColor(color: Int) {

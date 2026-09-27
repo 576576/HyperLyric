@@ -174,6 +174,7 @@ internal class StatusBarLyricHost(
             suppressAnimation = suppressAnimation,
             forceUnsplit = true,
             forceNoLyricsPlaceholder = true,
+            coverPaletteBackgroundIsDark = StatusBarTextColorHooker.currentBackgroundIsDark(),
             onLineWillApply = { candidateContentWidth ->
                 latestContentWidthPx = candidateContentWidth
                 val lockAtMaxWidth = autoDuetEnabled && lyrics.rawSecondaryLine != null
@@ -199,7 +200,7 @@ internal class StatusBarLyricHost(
         updateVisibility(wrapper, lyrics)
     }
 
-    fun refreshTextStyle(prefs: SharedPreferences) {
+    fun refreshTextStyle(prefs: SharedPreferences, forceStyle: Boolean = true) {
         val root = rootReference.get() ?: return
         val lyrics = lyricView ?: return
         if (lyrics.parent == null) return
@@ -216,10 +217,11 @@ internal class StatusBarLyricHost(
             prefs = lyricPrefs,
             config = config,
             mode = RootConstants.ISLAND_CONTENT_MODE_LYRIC,
-            force = true,
+            force = forceStyle,
+            coverPaletteBackgroundIsDark = StatusBarTextColorHooker.currentBackgroundIsDark(),
         )
         updateIconTint(lyrics)
-        root.requestLayout()
+        if (forceStyle) root.requestLayout()
     }
 
     fun updatePlaybackPosition(

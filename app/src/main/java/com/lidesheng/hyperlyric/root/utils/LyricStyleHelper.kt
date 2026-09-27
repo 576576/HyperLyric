@@ -19,7 +19,7 @@ import com.lidesheng.hyperlyric.lyric.view.WordMotion
  * 负责根据用户配置和歌曲信息（如封面）生成 RichLyricLineView 所需的样式对象
  */
 object LyricStyleHelper {
-    private const val COVER_BACKGROUND_ALPHA = 144
+    private const val COVER_BACKGROUND_ALPHA = 165
 
     /**
      * 构建歌词样式对象
@@ -31,7 +31,8 @@ object LyricStyleHelper {
         colorSession: CoverColorHelper.ColorSession? = null,
         artworkRequest: CoverColorHelper.ArtworkRequest? = null,
         textColorOverride: Int? = null,
-        lyricAlignmentOverride: Int? = null
+        lyricAlignmentOverride: Int? = null,
+        coverPaletteBackgroundIsDark: Boolean
     ): LyricViewStyle {
         val syllableSettings = SyllablePreferencePolicy.read(prefs)
         val fontSize =
@@ -160,9 +161,13 @@ object LyricStyleHelper {
                     CoverColorHelper.getCachedColors(useCoverGradient, it)
                 }
             }
-            val darkColors = palette?.second
-            if (darkColors != null && darkColors.isNotEmpty()) {
-                val backgroundCoverColors = darkColors.map {
+            val coverColors = if (coverPaletteBackgroundIsDark) {
+                palette?.second
+            } else {
+                palette?.first
+            }
+            if (coverColors != null && coverColors.isNotEmpty()) {
+                val backgroundCoverColors = coverColors.map {
                     Color.argb(
                         COVER_BACKGROUND_ALPHA,
                         Color.red(it),
@@ -170,13 +175,21 @@ object LyricStyleHelper {
                         Color.blue(it)
                     )
                 }.toIntArray()
-                primaryColors = darkColors   // 无逐字/标题 -> 封面颜色
-                bgColors = backgroundCoverColors // 未唱到 -> 封面颜色(alpha 144)
-                hlColors = darkColors        // 已唱到 -> 封面颜色
+                primaryColors = coverColors // 无逐字/标题 -> 封面颜色
+                bgColors = backgroundCoverColors // 未唱到 -> 半透明封面色
+                hlColors = coverColors       // 已唱到 -> 封面颜色
             } else {
-                primaryColors = intArrayOf(Color.WHITE)
-                bgColors = intArrayOf(Color.argb(128, 255, 255, 255))
-                hlColors = intArrayOf(Color.WHITE)
+                val fallbackColor = if (coverPaletteBackgroundIsDark) Color.WHITE else Color.BLACK
+                primaryColors = intArrayOf(fallbackColor)
+                bgColors = intArrayOf(
+                    Color.argb(
+                        128,
+                        Color.red(fallbackColor),
+                        Color.green(fallbackColor),
+                        Color.blue(fallbackColor)
+                    )
+                )
+                hlColors = intArrayOf(fallbackColor)
             }
         } else {
             primaryColors = intArrayOf(Color.WHITE)

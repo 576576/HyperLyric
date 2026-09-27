@@ -37,7 +37,8 @@ internal object IslandSlotStyleAssembler {
         config: IslandSlotRuntimeConfig,
         mode: Int,
         mediaInfo: MediaMetadataHelper.MediaInfo,
-        force: Boolean
+        force: Boolean,
+        coverPaletteBackgroundIsDark: Boolean
     ) {
         val lyricContentDisplay = config.lyricContentDisplay
         val colorSession = CoverColorHelper.currentSession(mediaInfo)
@@ -61,6 +62,7 @@ internal object IslandSlotStyleAssembler {
         ).joinToString("|")
         val colorSignature = listOf(
             config.textColorStyle,
+            coverPaletteBackgroundIsDark,
             statusBarTextColor,
             colorSession?.revision,
             colorSession?.mediaKey,
@@ -79,6 +81,7 @@ internal object IslandSlotStyleAssembler {
             colorSession = colorSession,
             artworkRequest = artworkRequest,
             textColorOverride = statusBarTextColor,
+            coverPaletteBackgroundIsDark = coverPaletteBackgroundIsDark,
             lyricAlignmentOverride = config.lyricAlignment.takeIf {
                 mode == RootConstants.ISLAND_CONTENT_MODE_LYRIC
             }

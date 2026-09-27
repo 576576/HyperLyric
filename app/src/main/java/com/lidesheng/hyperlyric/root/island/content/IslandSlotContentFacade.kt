@@ -33,7 +33,8 @@ internal object IslandSlotContentFacade {
         config: IslandSlotRuntimeConfig,
         mode: Int,
         mediaInfo: MediaMetadataHelper.MediaInfo = currentMediaInfo(view.context),
-        force: Boolean = false
+        force: Boolean = false,
+        coverPaletteBackgroundIsDark: Boolean = true
     ) {
         val usePlainTextLyricClock = mode == RootConstants.ISLAND_CONTENT_MODE_LYRIC &&
                 config.lyricMarqueeEnabled && LyriconDataBridge.isTextMode
@@ -53,7 +54,8 @@ internal object IslandSlotContentFacade {
             config = config,
             mode = mode,
             mediaInfo = mediaInfo,
-            force = force
+            force = force,
+            coverPaletteBackgroundIsDark = coverPaletteBackgroundIsDark
         )
     }
 
@@ -75,9 +77,18 @@ internal object IslandSlotContentFacade {
         onLineApplied: (() -> Unit)? = null,
         onLineCancelled: (() -> Unit)? = null,
         forceUnsplit: Boolean = false,
-        forceNoLyricsPlaceholder: Boolean = false
+        forceNoLyricsPlaceholder: Boolean = false,
+        coverPaletteBackgroundIsDark: Boolean = true
     ): Boolean {
-        configureView(view, prefs, config, mode, mediaInfo, force)
+        configureView(
+            view = view,
+            prefs = prefs,
+            config = config,
+            mode = mode,
+            mediaInfo = mediaInfo,
+            force = force,
+            coverPaletteBackgroundIsDark = coverPaletteBackgroundIsDark
+        )
         return if (mode == RootConstants.ISLAND_CONTENT_MODE_LYRIC) {
             IslandMetadataContentAssembler.clearState(view)
             IslandLyricContentAssembler.apply(
