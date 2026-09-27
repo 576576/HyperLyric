@@ -298,7 +298,11 @@ internal object IslandContentUpdateCoordinator {
             secondaryLineOverride = presentation.secondary,
             playbackActive = playbackActive,
             onLineWillApply = { contentWidthPx ->
-                IslandDynamicWidthCoordinator.prepareLyricWidth(view, tag, contentWidthPx)
+                IslandDynamicWidthCoordinator.prepareLyricWidth(
+                    view,
+                    tag,
+                    contentWidthPx
+                )
             },
             onLineApplied = {
                 IslandDynamicWidthCoordinator.clearPreflight(view, tag)
@@ -336,7 +340,11 @@ internal object IslandContentUpdateCoordinator {
             playbackActive = playbackActive,
             mediaInfo = mediaInfo,
             onLineWillApply = { contentWidthPx ->
-                IslandDynamicWidthCoordinator.prepareLyricWidth(view, tag, contentWidthPx)
+                IslandDynamicWidthCoordinator.prepareLyricWidth(
+                    view,
+                    tag,
+                    contentWidthPx
+                )
             },
             onLineApplied = {
                 IslandDynamicWidthCoordinator.clearPreflight(view, tag)

@@ -50,6 +50,7 @@ internal class StatusBarLyricHost(
     private var managedClockOriginalVisibility: Int? = null
     private var shouldKeepClockHidden = false
     private var layoutConfig: StatusBarLyricLayoutConfig? = null
+    private var autoDuetEnabled = false
     private var latestContentWidthPx = 0f
     private var iconWidthPx = 0
     private val wrapperLocationInWindow = IntArray(2)
@@ -143,6 +144,7 @@ internal class StatusBarLyricHost(
             lyricAlignment = RootConstants.CONTENT_ALIGNMENT_LEFT,
             textColorStyle = StatusBarLyricPreferences.effectiveStatusBarTextColorStyle(lyricPrefs),
         )
+        autoDuetEnabled = config.autoDuet
         val (wrapper, lyrics) = ensureViews(root, parent, clock, layoutConfig.insertionOrder)
         wrapper.setPadding(
             layoutConfig.paddingLeftPx,
@@ -174,10 +176,15 @@ internal class StatusBarLyricHost(
             forceNoLyricsPlaceholder = true,
             onLineWillApply = { candidateContentWidth ->
                 latestContentWidthPx = candidateContentWidth
-                val desiredWidth = layoutConfig.desiredWidthPx(
-                    contentWidthPx = candidateContentWidth,
-                    iconWidthPx = iconWidthPx,
-                )
+                val lockAtMaxWidth = autoDuetEnabled && lyrics.rawSecondaryLine != null
+                val desiredWidth = if (lockAtMaxWidth) {
+                    effectiveWidthLimitPx
+                } else {
+                    layoutConfig.desiredWidthPx(
+                        contentWidthPx = candidateContentWidth,
+                        iconWidthPx = iconWidthPx,
+                    )
+                }
                     .coerceAtMost(effectiveWidthLimitPx)
                 val changed = wrapper.desiredWidthPx != desiredWidth
                 wrapper.desiredWidthPx = desiredWidth
@@ -244,14 +251,16 @@ internal class StatusBarLyricHost(
         var changed = wrapper.maxWidthPx != effectiveWidthLimitPx
         wrapper.maxWidthPx = effectiveWidthLimitPx
 
-        val requestedWidth = latestContentWidthPx.takeIf { it > 0f }
-            ?.let { contentWidthPx ->
-                config.desiredWidthPx(
-                    contentWidthPx = contentWidthPx,
-                    iconWidthPx = iconWidthPx,
-                )
-            }
-            ?.coerceAtMost(effectiveWidthLimitPx)
+        val lyrics = lyricView
+        val lockAtMaxWidth = autoDuetEnabled && lyrics?.rawSecondaryLine != null
+        val requestedWidth = when {
+            lockAtMaxWidth -> effectiveWidthLimitPx
+            latestContentWidthPx > 0f -> config.desiredWidthPx(
+                contentWidthPx = latestContentWidthPx,
+                iconWidthPx = iconWidthPx,
+            ).coerceAtMost(effectiveWidthLimitPx)
+            else -> null
+        }
         if (requestedWidth != null && wrapper.desiredWidthPx != requestedWidth) {
             wrapper.desiredWidthPx = requestedWidth
             changed = true
@@ -276,6 +285,7 @@ internal class StatusBarLyricHost(
         iconController = null
         container = null
         layoutConfig = null
+        autoDuetEnabled = false
         latestContentWidthPx = 0f
         iconWidthPx = 0
     }

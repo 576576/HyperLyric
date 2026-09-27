@@ -96,7 +96,11 @@ internal object IslandLyricContentRefresher {
             suppressAnimation = true,
             mediaInfo = mediaInfo,
             onLineWillApply = { contentWidthPx ->
-                IslandDynamicWidthCoordinator.prepareLyricWidth(rootView, viewTag, contentWidthPx)
+                IslandDynamicWidthCoordinator.prepareLyricWidth(
+                    rootView,
+                    viewTag,
+                    contentWidthPx
+                )
             },
             onLineApplied = {
                 IslandDynamicWidthCoordinator.clearPreflight(rootView, viewTag)

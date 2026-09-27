@@ -63,7 +63,12 @@ internal object IslandDynamicWidthCoordinator {
             val prefs = HookEntry.instance?.prefs ?: return@post
             val config = IslandSlotRuntimeConfig.from(prefs)
             if (!config.geometry.isDynamicWidth) return@post
-            if (refreshDynamicSlotWidths(rootView, config)) {
+            if (refreshDynamicSlotWidths(
+                    rootView,
+                    config,
+                    forceMaxWidth = hasActiveAutoDuet(rootView, config)
+                )
+            ) {
                 scheduleSystemRelayout(rootView, hostToken)
             }
         }
@@ -94,7 +99,12 @@ internal object IslandDynamicWidthCoordinator {
             rootTargets[viewTag] = contentWidthPx
             rootTargets.toMap()
         }
-        val changed = refreshDynamicSlotWidths(rootView, config, overrides)
+        val changed = refreshDynamicSlotWidths(
+            rootView,
+            config,
+            overrides,
+            forceMaxWidth = hasActiveAutoDuet(rootView, config)
+        )
         if (changed) {
             scheduleSystemRelayout(rootView, hostToken)
         }
@@ -134,9 +144,30 @@ internal object IslandDynamicWidthCoordinator {
     private fun refreshDynamicSlotWidths(
         rootView: ViewGroup,
         config: IslandSlotRuntimeConfig,
-        contentWidthOverrides: Map<String, Float> = emptyMap()
+        contentWidthOverrides: Map<String, Float> = emptyMap(),
+        forceMaxWidth: Boolean = false
     ): Boolean {
         if (!config.geometry.isDynamicWidth) return false
+
+        if (forceMaxWidth) {
+            var changed = false
+            listOf(
+                IslandProbeUtils.LEFT_PARENT_NAME to IslandProbeUtils.LEFT_TEST_VIEW_TAG,
+                IslandProbeUtils.RIGHT_PARENT_NAME to IslandProbeUtils.RIGHT_TEST_VIEW_TAG
+            ).forEach { (parentName, viewTag) ->
+                if (config.modeForTag(viewTag) == RootConstants.ISLAND_CONTENT_MODE_NONE) {
+                    return@forEach
+                }
+                changed = updateDynamicSlotWidth(
+                    rootView,
+                    parentName,
+                    viewTag,
+                    config,
+                    config.geometry.maxWidthDp(parentName).toFloat()
+                ) || changed
+            }
+            return changed
+        }
 
         val lyricOnly = config.dynamicWidthBasis ==
                 RootConstants.ISLAND_DYNAMIC_WIDTH_BASIS_LYRIC_ONLY
@@ -183,6 +214,26 @@ internal object IslandDynamicWidthCoordinator {
             ) || changed
         }
         return changed
+    }
+
+    private fun hasActiveAutoDuet(
+        rootView: ViewGroup,
+        config: IslandSlotRuntimeConfig
+    ): Boolean {
+        if (!config.autoDuet) return false
+        return listOf(
+            IslandProbeUtils.LEFT_TEST_VIEW_TAG,
+            IslandProbeUtils.RIGHT_TEST_VIEW_TAG
+        ).any { viewTag ->
+            if (config.modeForTag(viewTag) != RootConstants.ISLAND_CONTENT_MODE_LYRIC) {
+                return@any false
+            }
+            when (val lyricView = rootView.findViewWithTag<View>(viewTag)) {
+                is RichLyricLineView -> lyricView.rawSecondaryLine != null
+                is SpaceGateRichLyricLineView -> lyricView.rawSecondaryLine != null
+                else -> false
+            }
+        }
     }
 
     private fun dynamicSlotBaseWidthDp(
