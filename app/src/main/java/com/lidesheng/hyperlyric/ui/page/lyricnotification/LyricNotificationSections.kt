@@ -109,7 +109,6 @@ fun LazyListScope.configSections(
                     items = lyricSourceOptions,
                     selectedIndex = lyricSource.takeIf { it in lyricSourceOptions.indices }
                         ?: ServiceConstants.LYRIC_SOURCE_AUTO,
-                    enabled = dynamicIslandEnabled,
                     onSelectedIndexChange = onLyricSourceChange
                 )
 
@@ -121,7 +120,6 @@ fun LazyListScope.configSections(
                     title = stringResource(R.string.title_notification_type),
                     items = notificationTypeOptions,
                     selectedIndex = notificationType,
-                    enabled = dynamicIslandEnabled,
                     onSelectedIndexChange = onNotificationTypeChange
                 )
             }
@@ -162,7 +160,6 @@ fun LazyListScope.configSections(
                     title = stringResource(R.string.title_island_left_icon),
                     items = iconStyleOptions,
                     selectedIndex = islandLeftIconStyle,
-                    enabled = dynamicIslandEnabled,
                     onSelectedIndexChange = onIslandLeftIconStyleChange
                 )
 
@@ -170,7 +167,6 @@ fun LazyListScope.configSections(
                     SwitchPreference(
                         title = stringResource(R.string.title_disable_lyric_split),
                         checked = disableLyricSplitEnabled,
-                        enabled = dynamicIslandEnabled,
                         onCheckedChange = onDisableLyricSplitToggle
                     )
                 }
@@ -179,7 +175,6 @@ fun LazyListScope.configSections(
                     SwitchPreference(
                         title = stringResource(R.string.title_lyric_highlight_color),
                         checked = highlightColorEnabled,
-                        enabled = dynamicIslandEnabled,
                         onCheckedChange = onHighlightColorToggle
                     )
                 }
@@ -188,7 +183,6 @@ fun LazyListScope.configSections(
                     title = stringResource(R.string.title_limit_width),
                     summary = stringResource(R.string.summary_experimental),
                     checked = limitWidthEnabled,
-                    enabled = dynamicIslandEnabled,
                     onCheckedChange = onLimitWidthToggle
                 )
 
@@ -197,7 +191,6 @@ fun LazyListScope.configSections(
                     BasicComponent(
                         title = stringResource(R.string.title_limit_width_desc),
                         summary = stringResource(R.string.summary_limit_width),
-                        enabled = dynamicIslandEnabled,
                         endActions = {
                             Text(
                                 "$sliderDragValue",
@@ -208,7 +201,6 @@ fun LazyListScope.configSections(
                         bottomAction = {
                             Slider(
                                 value = sliderDragValue.toFloat(),
-                                enabled = dynamicIslandEnabled,
                                 onValueChange = {
                                     sliderDragValue = it.toInt()
                                 },
@@ -242,7 +234,6 @@ fun LazyListScope.configSections(
                         title = stringResource(R.string.title_focus_show_notification),
                         summary = stringResource(R.string.summary_focus_show_notification),
                         checked = focusShowNotificationEnabled,
-                        enabled = dynamicIslandEnabled,
                         onCheckedChange = onFocusShowNotificationToggle
                     )
                 }
@@ -258,7 +249,6 @@ fun LazyListScope.configSections(
                 title = stringResource(R.string.title_notification_click),
                 items = clickOptions,
                 selectedIndex = notificationClickAction,
-                enabled = dynamicIslandEnabled,
                 onSelectedIndexChange = onNotificationClickActionChange
             )
 
@@ -266,7 +256,6 @@ fun LazyListScope.configSections(
                 title = stringResource(R.string.title_show_progress),
                 summary = stringResource(R.string.summary_show_progress),
                 checked = showProgressEnabled,
-                enabled = dynamicIslandEnabled,
                 onCheckedChange = onShowProgressToggle
             )
 
@@ -275,7 +264,6 @@ fun LazyListScope.configSections(
                     title = stringResource(R.string.title_progress_color),
                     summary = stringResource(R.string.summary_progress_color),
                     checked = progressColorEnabled,
-                    enabled = dynamicIslandEnabled,
                     onCheckedChange = onProgressColorToggle
                 )
             }
@@ -283,7 +271,6 @@ fun LazyListScope.configSections(
             SwitchPreference(
                 title = stringResource(R.string.title_show_album_art),
                 checked = showAlbumArtEnabled,
-                enabled = dynamicIslandEnabled,
                 onCheckedChange = onShowAlbumArtToggle
             )
 
@@ -293,7 +280,6 @@ fun LazyListScope.configSections(
                     title = stringResource(R.string.title_focus_style),
                     items = focusStyleOptions,
                     selectedIndex = 1 - focusNotificationType,
-                    enabled = dynamicIslandEnabled,
                     onSelectedIndexChange = { index ->
                         onFocusNotificationTypeChange(1 - index)
                     }
@@ -315,7 +301,6 @@ fun LazyListScope.configSections(
                 title = stringResource(R.string.title_song_info),
                 items = normalTitleOptions,
                 selectedIndex = normalNotificationTitleStyle,
-                enabled = dynamicIslandEnabled,
                 onSelectedIndexChange = onNormalNotificationTitleStyleChange
             )
 
@@ -323,7 +308,6 @@ fun LazyListScope.configSections(
                 SwitchPreference(
                     title = stringResource(R.string.title_song_info_highlight_color),
                     checked = songInfoHighlightColorEnabled,
-                    enabled = dynamicIslandEnabled,
                     onCheckedChange = onSongInfoHighlightColorToggle
                 )
             }
@@ -345,12 +329,10 @@ fun LazyListScope.configSections(
             Column {
                 ArrowPreference(
                     title = stringResource(R.string.title_autostart),
-                    enabled = dynamicIslandEnabled,
                     onClick = onAutostartClick
                 )
                 ArrowPreference(
                     title = stringResource(R.string.title_battery_optimization),
-                    enabled = dynamicIslandEnabled,
                     onClick = onBatteryOptimizationClick
                 )
                 AnimatedVisibility(visible = notificationType == 1) {
@@ -358,7 +340,6 @@ fun LazyListScope.configSections(
                         title = stringResource(R.string.title_bypass_focus_limit),
                         summary = stringResource(R.string.summary_bypass_focus_limit),
                         checked = bypassFocusLimitEnabled,
-                        enabled = dynamicIslandEnabled,
                         onCheckedChange = onBypassFocusLimitToggle
                     )
                 }
