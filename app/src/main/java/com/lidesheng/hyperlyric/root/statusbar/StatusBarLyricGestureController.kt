@@ -217,8 +217,11 @@ internal class StatusBarLyricGestureController(
             return
         }
 
-        val controller = IslandPlaybackControllerResolver
-            .resolveForCurrentLyric(touchView.context)
+        val controller = runCatching {
+            IslandPlaybackControllerResolver.resolveForCurrentLyric(touchView.context)
+        }.onFailure { error ->
+            HookLogger.w(TAG, "解析当前歌词对应的媒体会话失败，继续尝试按包名启动", error)
+        }.getOrNull()
         val packageName = sourcePackage ?: metadataPackage ?: controller?.packageName
         if (packageName.isNullOrBlank()) {
             HookLogger.w(TAG, "缺少当前歌词对应的媒体应用包名，忽略打开应用")
@@ -232,13 +235,11 @@ internal class StatusBarLyricGestureController(
                 }
                 .getOrNull()
             if (sessionActivity != null) {
-                val opened = runCatching {
+                runCatching {
                     sessionActivity.send()
-                    true
                 }.onFailure { error ->
                     HookLogger.w(TAG, "打开当前媒体会话对应的应用失败", error)
-                }.getOrDefault(false)
-                if (opened) return
+                }
             }
         }
 
@@ -255,6 +256,7 @@ internal class StatusBarLyricGestureController(
         runCatching {
             launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(launchIntent)
+            HookLogger.d(TAG, "已提交媒体应用启动请求: package=$packageName")
         }.onFailure { error ->
             HookLogger.w(TAG, "启动媒体应用失败: package=$packageName", error)
         }
