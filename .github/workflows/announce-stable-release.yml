@@ -111,6 +111,88 @@ jobs:
             exit 1
           fi
 
+      - name: 创建带发布时间的 Xposed Tag Create Dated Xposed Tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          XPOSED_REPO_TOKEN: ${{ secrets.XPOSED_REPO_TOKEN }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          EVENT_PUBLISHED_AT: ${{ github.event.release.published_at }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          XPOSED_REPOSITORY='Xposed-Modules-Repo/com.lidesheng.hyperlyric'
+          RELEASE_PUBLISHED_AT="$EVENT_PUBLISHED_AT"
+
+          if [[ -z "$RELEASE_PUBLISHED_AT" ]]; then
+            SOURCE_RELEASE="$(gh release view "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --json isDraft,isPrerelease,publishedAt)"
+            if [[ "$(jq -r '.isDraft' <<< "$SOURCE_RELEASE")" != 'false' ]]; then
+              echo '::error::只能同步已发布的正式版 Release'
+              exit 1
+            fi
+            if [[ "$(jq -r '.isPrerelease' <<< "$SOURCE_RELEASE")" != 'false' ]]; then
+              echo '::error::不能将 Pre-release 同步到 Xposed 仓库'
+              exit 1
+            fi
+            RELEASE_PUBLISHED_AT="$(jq -r '.publishedAt // empty' <<< "$SOURCE_RELEASE")"
+          fi
+
+          if [[ -z "$RELEASE_PUBLISHED_AT" ]]; then
+            echo '::error::无法读取正式版 Release 的发布时间'
+            exit 1
+          fi
+
+          MATCHING_REFS="$(GH_TOKEN="$XPOSED_REPO_TOKEN" gh api \
+            "repos/$XPOSED_REPOSITORY/git/matching-refs/tags/$RELEASE_TAG")"
+          EXISTING_REF="$(jq -c --arg ref "refs/tags/$RELEASE_TAG" \
+            '.[] | select(.ref == $ref)' <<< "$MATCHING_REFS")"
+
+          if [[ -n "$EXISTING_REF" ]]; then
+            TARGET_TYPE="$(jq -r '.object.type' <<< "$EXISTING_REF")"
+            TARGET_SHA="$(jq -r '.object.sha' <<< "$EXISTING_REF")"
+
+            while [[ "$TARGET_TYPE" == 'tag' ]]; do
+              NESTED_TAG="$(GH_TOKEN="$XPOSED_REPO_TOKEN" gh api \
+                "repos/$XPOSED_REPOSITORY/git/tags/$TARGET_SHA")"
+              TARGET_TYPE="$(jq -r '.object.type' <<< "$NESTED_TAG")"
+              TARGET_SHA="$(jq -r '.object.sha' <<< "$NESTED_TAG")"
+            done
+
+            if [[ "$TARGET_TYPE" != 'commit' ]]; then
+              echo "::error::Xposed Tag $RELEASE_TAG 指向非 commit 对象: $TARGET_TYPE"
+              exit 1
+            fi
+          else
+            DEFAULT_BRANCH="$(GH_TOKEN="$XPOSED_REPO_TOKEN" gh api \
+              "repos/$XPOSED_REPOSITORY" --jq '.default_branch')"
+            TARGET_SHA="$(GH_TOKEN="$XPOSED_REPO_TOKEN" gh api \
+              "repos/$XPOSED_REPOSITORY/commits/$DEFAULT_BRANCH" --jq '.sha')"
+          fi
+
+          TAG_OBJECT_SHA="$(jq -n \
+            --arg tag "$RELEASE_TAG" \
+            --arg message "Release $RELEASE_TAG" \
+            --arg target "$TARGET_SHA" \
+            --arg date "$RELEASE_PUBLISHED_AT" \
+            '{tag:$tag,message:$message,object:$target,type:"commit",tagger:{name:"GitHub Actions",email:"github-actions[bot]@users.noreply.github.com",date:$date}}' \
+            | GH_TOKEN="$XPOSED_REPO_TOKEN" gh api \
+              --method POST "repos/$XPOSED_REPOSITORY/git/tags" \
+              --input - --jq '.sha')"
+
+          if [[ -n "$EXISTING_REF" ]]; then
+            GH_TOKEN="$XPOSED_REPO_TOKEN" gh api \
+              --method PATCH "repos/$XPOSED_REPOSITORY/git/refs/tags/$RELEASE_TAG" \
+              -f "sha=$TAG_OBJECT_SHA" -F force=true > /dev/null
+          else
+            GH_TOKEN="$XPOSED_REPO_TOKEN" gh api \
+              --method POST "repos/$XPOSED_REPOSITORY/git/refs" \
+              -f "ref=refs/tags/$RELEASE_TAG" -f "sha=$TAG_OBJECT_SHA" > /dev/null
+          fi
+
+          echo "Xposed Tag $RELEASE_TAG now uses the published time $RELEASE_PUBLISHED_AT and commit $TARGET_SHA"
+
       - name: 同步正式版到 Xposed 仓库 Sync Stable Release to Xposed Repo
         uses: softprops/action-gh-release@v3
         with:
