@@ -21,7 +21,6 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import com.lidesheng.hyperlyric.R
 import com.lidesheng.hyperlyric.common.PrefsBridge
-import com.lidesheng.hyperlyric.common.LyricOutputTargetPreferencePolicy
 import com.lidesheng.hyperlyric.common.StatusBarLyricPreferences
 import com.lidesheng.hyperlyric.common.UIConstants
 import com.lidesheng.hyperlyric.ui.navigation.LocalNavigator
@@ -59,28 +58,24 @@ internal fun rememberHookConfigSaver(prefs: SharedPreferences): (String, Any) ->
     return remember(prefs) {
         { key: String, value: Any ->
             val storedKey = StatusBarLyricPreferences.resolveStoredKey(prefs, key)
-            if (value is Boolean && LyricOutputTargetPreferencePolicy.isTargetKey(storedKey)) {
-                PrefsBridge.putBoolean(storedKey, value)
-            } else {
-                prefs.edit {
-                    when (value) {
-                        is Int -> putInt(key, value)
-                        is Boolean -> putBoolean(key, value)
-                        is Float -> putFloat(key, value)
-                        is String -> putString(key, value)
-                        is Set<*> -> putStringSet(key, value.filterIsInstance<String>().toSet())
-                    }
-                }
+            prefs.edit {
                 when (value) {
-                    is Int -> PrefsBridge.putInt(storedKey, value)
-                    is Boolean -> PrefsBridge.putBoolean(storedKey, value)
-                    is Float -> PrefsBridge.putFloat(storedKey, value)
-                    is String -> PrefsBridge.putString(storedKey, value)
-                    is Set<*> -> PrefsBridge.putStringSet(
-                        storedKey,
-                        value.filterIsInstance<String>().toSet()
-                    )
+                    is Int -> putInt(key, value)
+                    is Boolean -> putBoolean(key, value)
+                    is Float -> putFloat(key, value)
+                    is String -> putString(key, value)
+                    is Set<*> -> putStringSet(key, value.filterIsInstance<String>().toSet())
                 }
+            }
+            when (value) {
+                is Int -> PrefsBridge.putInt(storedKey, value)
+                is Boolean -> PrefsBridge.putBoolean(storedKey, value)
+                is Float -> PrefsBridge.putFloat(storedKey, value)
+                is String -> PrefsBridge.putString(storedKey, value)
+                is Set<*> -> PrefsBridge.putStringSet(
+                    storedKey,
+                    value.filterIsInstance<String>().toSet()
+                )
             }
         }
     }

@@ -2,11 +2,9 @@ package com.lidesheng.hyperlyric.common
 
 object RootConstants {
     // ================= HOOK & SUPER ISLAND KEYS =================
-    const val KEY_HOOK_ENABLE_SUPER_ISLAND = "key_hook_enable_super_island"
+    const val KEY_HOOK_ENABLE = "key_hook_enable"
+    const val KEY_HOOK_LYRIC_TYPE = "key_hook_lyric_type"
     const val KEY_HOOK_ENABLE_DYNAMIC_ISLAND = "key_hook_enable_dynamic_island"
-    const val KEY_HOOK_STATUS_BAR_LYRIC_ENABLED = "key_hook_status_bar_lyric_enabled"
-    const val KEY_HOOK_STATUS_BAR_LYRIC_CONFIG_INITIALIZED =
-        "key_hook_status_bar_lyric_config_initialized"
     const val KEY_HOOK_STATUS_BAR_LYRIC_INSERTION_ORDER =
         "key_hook_status_bar_lyric_insertion_order"
     const val KEY_HOOK_STATUS_BAR_LYRIC_ICON_ENABLED =
@@ -301,9 +299,11 @@ object RootConstants {
     const val MIN_HOOK_LYRICON_PROVIDER_DELAY = -5000
     const val MAX_HOOK_LYRICON_PROVIDER_DELAY = 5000
 
-    const val DEFAULT_HOOK_ENABLE_SUPER_ISLAND = false
+    const val DEFAULT_HOOK_ENABLE = false
+    const val LYRIC_TYPE_SUPER_ISLAND = 0
+    const val LYRIC_TYPE_STATUS_BAR = 1
+    const val DEFAULT_HOOK_LYRIC_TYPE = LYRIC_TYPE_SUPER_ISLAND
     const val DEFAULT_HOOK_ENABLE_DYNAMIC_ISLAND = false
-    const val DEFAULT_HOOK_STATUS_BAR_LYRIC_ENABLED = false
     const val STATUS_BAR_LYRIC_INSERTION_BEFORE_CLOCK = 0
     const val STATUS_BAR_LYRIC_INSERTION_AFTER_CLOCK = 1
     const val DEFAULT_HOOK_STATUS_BAR_LYRIC_INSERTION_ORDER =

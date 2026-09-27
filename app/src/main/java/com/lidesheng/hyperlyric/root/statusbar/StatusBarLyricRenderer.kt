@@ -6,6 +6,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
+import com.lidesheng.hyperlyric.common.LyricTypePreference
 import com.lidesheng.hyperlyric.common.RootConstants
 import com.lidesheng.hyperlyric.common.StatusBarLyricPreferences
 import com.lidesheng.hyperlyric.root.HookEntry
@@ -152,11 +153,9 @@ internal object StatusBarLyricRenderer {
     fun updateTextColors() {
         runOnMain {
             val prefs = HookEntry.instance?.prefs ?: return@runOnMain
-            if (!prefs.getBoolean(
-                    StatusBarLyricPreferences.KEY_ENABLED,
-                    StatusBarLyricPreferences.DEFAULT_ENABLED,
-                )
-            ) return@runOnMain
+            if (!LyricTypePreference.isEnabled(prefs, RootConstants.LYRIC_TYPE_STATUS_BAR)) {
+                return@runOnMain
+            }
             StatusBarLyricHostRegistry.liveHosts().forEach { host ->
                 host.refreshTextStyle(prefs)
             }
@@ -177,10 +176,8 @@ internal object StatusBarLyricRenderer {
         val prefs = HookEntry.instance?.prefs
         refreshClockVisibility(prefs)
         refreshIslandSuppressionPolicy(prefs)
-        if (prefs == null || !prefs.getBoolean(
-                StatusBarLyricPreferences.KEY_ENABLED,
-                StatusBarLyricPreferences.DEFAULT_ENABLED,
-            )
+        if (prefs == null ||
+            !LyricTypePreference.isEnabled(prefs, RootConstants.LYRIC_TYPE_STATUS_BAR)
         ) {
             clearAllViews()
             return
@@ -255,10 +252,7 @@ internal object StatusBarLyricRenderer {
         val hasLyrics = LyriconDataBridge.hasLyricsForPresentation()
         val hasPlaceholder = !hasLyrics &&
                 LyriconDataBridge.hasNoLyricsPlaceholderForPresentation()
-        if (!prefs.getBoolean(
-                StatusBarLyricPreferences.KEY_ENABLED,
-                StatusBarLyricPreferences.DEFAULT_ENABLED,
-            ) ||
+        if (!LyricTypePreference.isEnabled(prefs, RootConstants.LYRIC_TYPE_STATUS_BAR) ||
             (!hasLyrics && !hasPlaceholder)
         ) return false
         if (prefs.getBoolean(
@@ -300,10 +294,10 @@ internal object StatusBarLyricRenderer {
 
     private fun refreshClockVisibility(prefs: android.content.SharedPreferences?) {
         runOnMain {
-            val enabled = prefs?.getBoolean(
-                StatusBarLyricPreferences.KEY_ENABLED,
-                StatusBarLyricPreferences.DEFAULT_ENABLED,
-            ) == true
+            val enabled = prefs != null && LyricTypePreference.isEnabled(
+                prefs,
+                RootConstants.LYRIC_TYPE_STATUS_BAR,
+            )
             val behavior = prefs?.getInt(
                 RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_CLOCK_HIDE_BEHAVIOR,
                 RootConstants.DEFAULT_HOOK_STATUS_BAR_LYRIC_CLOCK_HIDE_BEHAVIOR,
@@ -328,10 +322,10 @@ internal object StatusBarLyricRenderer {
     }
 
     private fun refreshIslandSuppressionPolicy(prefs: android.content.SharedPreferences?) {
-        val enabled = prefs?.getBoolean(
-            StatusBarLyricPreferences.KEY_ENABLED,
-            StatusBarLyricPreferences.DEFAULT_ENABLED,
-        ) == true
+        val enabled = prefs != null && LyricTypePreference.isEnabled(
+            prefs,
+            RootConstants.LYRIC_TYPE_STATUS_BAR,
+        )
         val behavior = if (enabled) {
             prefs.getInt(
                 RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_ISLAND_HIDE_BEHAVIOR,

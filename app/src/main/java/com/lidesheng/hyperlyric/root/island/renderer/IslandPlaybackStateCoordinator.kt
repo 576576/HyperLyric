@@ -2,6 +2,7 @@ package com.lidesheng.hyperlyric.root.island.renderer
 
 import android.os.Handler
 import android.os.Looper
+import com.lidesheng.hyperlyric.common.LyricTypePreference
 import com.lidesheng.hyperlyric.common.RootConstants
 import com.lidesheng.hyperlyric.root.HookEntry
 import com.lidesheng.hyperlyric.root.LyriconDataBridge
@@ -33,11 +34,7 @@ internal object IslandPlaybackStateCoordinator {
             return
         }
         val prefs = HookEntry.instance?.prefs ?: return
-        if (!prefs.getBoolean(
-                RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND,
-                RootConstants.DEFAULT_HOOK_ENABLE_SUPER_ISLAND
-            )
-        ) {
+        if (!LyricTypePreference.isEnabled(prefs, RootConstants.LYRIC_TYPE_SUPER_ISLAND)) {
             HookLogger.dState(
                 stateId = "IslandPlaybackStateCoordinator.policy",
                 tag = "IslandPlaybackStateCoordinator",

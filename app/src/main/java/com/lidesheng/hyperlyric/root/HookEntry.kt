@@ -133,7 +133,6 @@ class HookEntry : XposedModule() {
             RootConstants.KEY_HOOK_WORD_MOTION_LATIN_BY_CHARACTER,
             RootConstants.KEY_HOOK_WORD_MOTION_LATIN_LIFT,
             RootConstants.KEY_HOOK_WORD_MOTION_LATIN_WAVE,
-            RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND
         )
     }
 
@@ -582,9 +581,6 @@ class HookEntry : XposedModule() {
                             StatusBarLyricPreferences.shouldFollowStatusBarTextColor(prefs)
                         )
                         Handler(Looper.getMainLooper()).post {
-                            if (key == StatusBarLyricPreferences.KEY_ENABLED) {
-                                updateLyricSourceRuntime()
-                            }
                             StatusBarLyricRenderer.onPreferenceChanged()
                         }
                         return@OnSharedPreferenceChangeListener
@@ -650,9 +646,19 @@ class HookEntry : XposedModule() {
                             }
                         }
 
-                        RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND -> {
+                        RootConstants.KEY_HOOK_ENABLE -> {
                             Handler(Looper.getMainLooper()).post {
                                 updateSystemUiEnhancements(SystemUiEnhancementGate.isEnabled())
+                            }
+                        }
+
+                        RootConstants.KEY_HOOK_LYRIC_TYPE -> {
+                            StatusBarTextColorHooker.setFollowStatusBarEnabled(
+                                StatusBarLyricPreferences.shouldFollowStatusBarTextColor(prefs)
+                            )
+                            Handler(Looper.getMainLooper()).post {
+                                IslandSettingsRefreshCoordinator.request()
+                                SystemUiLyricRenderer.updateLyricLine()
                             }
                         }
 
@@ -734,13 +740,7 @@ class HookEntry : XposedModule() {
     }
 
     private fun shouldRunLyricSource(): Boolean =
-        prefs.getBoolean(
-            RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND,
-            RootConstants.DEFAULT_HOOK_ENABLE_SUPER_ISLAND,
-        ) || prefs.getBoolean(
-            StatusBarLyricPreferences.KEY_ENABLED,
-            StatusBarLyricPreferences.DEFAULT_ENABLED,
-        )
+        prefs.getBoolean(RootConstants.KEY_HOOK_ENABLE, RootConstants.DEFAULT_HOOK_ENABLE)
 
     private fun updateLyricSourceRuntime() {
         if (shouldRunLyricSource()) {

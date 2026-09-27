@@ -5,11 +5,6 @@ import java.util.WeakHashMap
 
 /** Preference keys and the scoped view used by the status-bar lyric projection. */
 object StatusBarLyricPreferences {
-    const val KEY_ENABLED = RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_ENABLED
-    const val DEFAULT_ENABLED = RootConstants.DEFAULT_HOOK_STATUS_BAR_LYRIC_ENABLED
-    const val KEY_CONFIG_INITIALIZED =
-        RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_CONFIG_INITIALIZED
-
     private const val CONFIG_PREFIX = "key_hook_status_bar_lyric_"
 
     // Marquee settings intentionally remain unmapped so both lyric targets share the same values.
@@ -49,7 +44,7 @@ object StatusBarLyricPreferences {
         ScopedSharedPreferences(prefs, scopedKeys)
 
     fun isStatusBarPreferenceKey(key: String?): Boolean =
-        key == KEY_ENABLED || key in sourceKeys || key in layoutKeys
+        key in sourceKeys || key in layoutKeys
 
     fun scopedKey(key: String): String = scopedKeys[key] ?: key
 
@@ -65,44 +60,17 @@ object StatusBarLyricPreferences {
         }
     }
 
-    /** Copies the current shared lyric values once, so both renderers start visually alike. */
-    fun initializeFromShared(prefs: SharedPreferences): Boolean {
-        if (prefs.getBoolean(KEY_CONFIG_INITIALIZED, false)) return false
-
-        val current = prefs.all
-        val editor = prefs.edit()
-        scopedKeys.forEach { (sourceKey, scopedKey) ->
-            if (!current.containsKey(scopedKey)) {
-                copyPreferenceValue(editor, scopedKey, current[sourceKey])
-            }
-        }
-        editor.putBoolean(KEY_CONFIG_INITIALIZED, true).apply()
-        return true
-    }
-
     fun shouldFollowStatusBarTextColor(prefs: SharedPreferences): Boolean {
-        val sharedFollow = LyricTextColorStylePolicy.followsStatusBar(
-            LyricTextColorStylePolicy.read(prefs)
+        val statusBarSelected = LyricTypePreference.read(prefs) ==
+                RootConstants.LYRIC_TYPE_STATUS_BAR
+        val style = LyricTextColorStylePolicy.read(
+            if (statusBarSelected) scoped(prefs) else prefs
         )
-        if (sharedFollow) return true
-        if (!prefs.getBoolean(KEY_ENABLED, DEFAULT_ENABLED)) return false
-        val statusBarStyle = LyricTextColorStylePolicy.read(scoped(prefs))
-        return statusBarStyle == RootConstants.TEXT_COLOR_STYLE_DEFAULT ||
-                LyricTextColorStylePolicy.followsStatusBar(statusBarStyle)
-    }
-
-    private fun copyPreferenceValue(
-        editor: SharedPreferences.Editor,
-        key: String,
-        value: Any?
-    ) {
-        when (value) {
-            is Boolean -> editor.putBoolean(key, value)
-            is Int -> editor.putInt(key, value)
-            is Long -> editor.putLong(key, value)
-            is Float -> editor.putFloat(key, value)
-            is String -> editor.putString(key, value)
-            is Set<*> -> editor.putStringSet(key, value.filterIsInstance<String>().toMutableSet())
+        return if (statusBarSelected) {
+            style == RootConstants.TEXT_COLOR_STYLE_DEFAULT ||
+                    LyricTextColorStylePolicy.followsStatusBar(style)
+        } else {
+            LyricTextColorStylePolicy.followsStatusBar(style)
         }
     }
 
@@ -118,22 +86,13 @@ object StatusBarLyricPreferences {
 
         fun storedKey(key: String): String = keyMap[key] ?: key
 
-        private fun readKey(key: String): String {
-            val scopedKey = keyMap[key] ?: return key
-            if (delegate.contains(scopedKey)) return scopedKey
-            val initialized = delegate.getBoolean(KEY_CONFIG_INITIALIZED, false)
-            return if (!initialized && delegate.contains(key)) key else scopedKey
-        }
+        private fun readKey(key: String): String = keyMap[key] ?: key
 
         override fun getAll(): MutableMap<String, *> {
             val values = delegate.all.entries.associateTo(mutableMapOf()) { it.key to it.value }
-            val initialized = delegate.getBoolean(KEY_CONFIG_INITIALIZED, false)
             keyMap.forEach { (sourceKey, scopedKey) ->
-                when {
-                    delegate.contains(scopedKey) -> values[sourceKey] = delegate.all[scopedKey]
-                    !initialized && delegate.contains(sourceKey) -> Unit
-                    else -> values.remove(sourceKey)
-                }
+                if (delegate.contains(scopedKey)) values[sourceKey] = delegate.all[scopedKey]
+                else values.remove(sourceKey)
                 values.remove(scopedKey)
             }
             return values
@@ -167,9 +126,7 @@ object StatusBarLyricPreferences {
         override fun contains(key: String?): Boolean {
             val sourceKey = requireNotNull(key)
             val scopedKey = keyMap[sourceKey] ?: return delegate.contains(sourceKey)
-            return delegate.contains(scopedKey) ||
-                    (!delegate.getBoolean(KEY_CONFIG_INITIALIZED, false) &&
-                            delegate.contains(sourceKey))
+            return delegate.contains(scopedKey)
         }
 
         override fun edit(): SharedPreferences.Editor = ScopedEditor(delegate.edit(), keyMap)

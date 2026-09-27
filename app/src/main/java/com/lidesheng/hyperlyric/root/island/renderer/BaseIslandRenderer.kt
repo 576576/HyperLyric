@@ -3,6 +3,7 @@ package com.lidesheng.hyperlyric.root.island.renderer
 import android.os.Handler
 import android.os.Looper
 import android.view.View
+import com.lidesheng.hyperlyric.common.LyricTypePreference
 import com.lidesheng.hyperlyric.common.RootConstants
 import com.lidesheng.hyperlyric.root.HookEntry
 import com.lidesheng.hyperlyric.root.LyriconDataBridge
@@ -59,11 +60,7 @@ object BaseIslandRenderer : LyricRenderer {
 
     private fun performRefreshActiveIsland() {
         val prefs = HookEntry.instance?.prefs ?: return
-        if (!prefs.getBoolean(
-                RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND,
-                RootConstants.DEFAULT_HOOK_ENABLE_SUPER_ISLAND
-            )
-        ) {
+        if (!LyricTypePreference.isEnabled(prefs, RootConstants.LYRIC_TYPE_SUPER_ISLAND)) {
             clearAllViews()
             return
         }
@@ -114,10 +111,8 @@ object BaseIslandRenderer : LyricRenderer {
 
     private fun performUpdateMetadata() {
         val prefs = HookEntry.instance?.prefs ?: return
-        if (!prefs.getBoolean(
-                RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND,
-                RootConstants.DEFAULT_HOOK_ENABLE_SUPER_ISLAND
-            ) || !shouldRenderInjectedIsland()
+        if (!LyricTypePreference.isEnabled(prefs, RootConstants.LYRIC_TYPE_SUPER_ISLAND) ||
+            !shouldRenderInjectedIsland()
         ) {
             refreshActiveIsland()
             return
@@ -155,14 +150,17 @@ object BaseIslandRenderer : LyricRenderer {
     }
 
     override fun updateLyricLine() {
+        val prefs = HookEntry.instance?.prefs ?: return
+        if (!LyricTypePreference.isEnabled(prefs, RootConstants.LYRIC_TYPE_SUPER_ISLAND)) {
+            clearAllViews()
+            return
+        }
         // Streaming sources and plugin results can change lyric availability without publishing
         // metadata. A missing lyric is a presentation-policy transition, so it must restore the
         // native host (or run the opt-in metadata-only path) instead of only blanking the slot.
         if (refreshForNoLyrics()) return
-        if ((HookEntry.instance?.prefs?.getBoolean(
-                RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND,
-                RootConstants.DEFAULT_HOOK_ENABLE_SUPER_ISLAND
-            )) != true || !shouldRenderInjectedIsland()
+        if (!LyricTypePreference.isEnabled(prefs, RootConstants.LYRIC_TYPE_SUPER_ISLAND) ||
+            !shouldRenderInjectedIsland()
         ) return
         val lyricPackage = LyriconDataBridge.currentLyricPackageName
             ?.takeIf { it.isNotEmpty() }
@@ -226,10 +224,8 @@ object BaseIslandRenderer : LyricRenderer {
 
     override fun updatePosition(position: Long, playbackSpeed: Float) {
         val prefs = HookEntry.instance?.prefs ?: return
-        if (!prefs.getBoolean(
-                RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND,
-                RootConstants.DEFAULT_HOOK_ENABLE_SUPER_ISLAND
-            ) || !shouldRenderInjectedIsland()
+        if (!LyricTypePreference.isEnabled(prefs, RootConstants.LYRIC_TYPE_SUPER_ISLAND) ||
+            !shouldRenderInjectedIsland()
         ) return
         val lyricPackage = LyriconDataBridge.currentLyricPackageName ?: return
         val lyricVersion = LyriconDataBridge.versionCounter.get()

@@ -92,9 +92,12 @@
 
     <!-- ———————————————————————— HookSettingsPage ———————————————————————— -->
     <string name="title_enable">启用</string>
+    <string name="title_lyric_type">歌词类型</string>
+    <string name="option_lyric_type_super_island">超级岛歌词</string>
+    <string name="option_lyric_type_status_bar">状态栏歌词</string>
+    <string name="title_lyric_settings">歌词设置</string>
     <string name="title_lyric_source">歌词源</string>
-    <string name="title_status_bar_lyrics">状态栏歌词</string>
-    <string name="title_status_bar_lyric_config">基础配置</string>
+    <string name="title_status_bar">状态栏</string>
     <string name="title_status_bar_lyric_layout">布局</string>
     <string name="title_status_bar_lyric_insertion_order">插入位置</string>
     <string name="option_status_bar_lyric_before_clock">时钟之前</string>
@@ -110,6 +113,7 @@
     <string name="option_status_bar_lyric_icon_after_lyric">歌词之后</string>
     <string name="title_status_bar_lyric_icon_size">图标大小</string>
     <string name="format_status_bar_lyric_icon_size">%1$d dp</string>
+    <string name="label_status_bar_lyric_icon_size_range">范围：%1$d–%2$d dp</string>
     <string name="title_status_bar_lyric_portrait_width">竖屏时最大宽度</string>
     <string name="title_status_bar_lyric_landscape_width">横屏时最大宽度</string>
     <string name="format_status_bar_lyric_width_value">%1$d dp</string>
@@ -197,8 +201,8 @@
 
     <string name="title_hide_media_time">隐藏进度时间</string>
     <string name="title_hide_media_custom_actions">隐藏自定义动作按钮</string>
-    <string name="title_disable_media_cover_flip">禁用音频封面翻转动画</string>
-    <string name="title_hide_audio_cover_shadow">隐藏音频封面阴影</string>
+    <string name="title_disable_media_cover_flip">禁用音乐封面翻转动画</string>
+    <string name="title_hide_audio_cover_shadow">隐藏音乐封面阴影</string>
     <string name="title_media_progress_style">进度条样式</string>
     <string name="option_media_progress_style_default">默认</string>
     <string name="option_media_progress_style_wave">波浪</string>
@@ -494,9 +498,9 @@
     <string name="title_right_padding">右侧内容内边距</string>
     <string name="label_left_padding">左边距</string>
     <string name="label_right_padding">右边距</string>
-    <string name="title_audio_cover">音频封面</string>
-    <string name="title_audio_cover_style">音频封面样式</string>
-    <string name="title_hide_audio_cover_source">隐藏音频封面的来源标识</string>
+    <string name="title_audio_cover">音乐封面</string>
+    <string name="title_audio_cover_style">音乐封面样式</string>
+    <string name="title_hide_audio_cover_source">隐藏音乐封面的来源标识</string>
     <string name="title_hide_media_device_switch">隐藏设备切换按钮</string>
     <string name="option_audio_cover_style_default">默认</string>
     <string name="option_audio_cover_style_circle">圆形封面</string>
@@ -504,7 +508,7 @@
     <string name="option_audio_cover_style_app_icon">应用图标</string>
     <string name="option_audio_cover_style_monochrome">单色图标</string>
     <string name="option_audio_cover_style_hidden">隐藏封面</string>
-    <string name="title_audio_rhythm">音频律动</string>
+    <string name="title_audio_rhythm">音乐律动</string>
     <string name="option_audio_rhythm_default">默认</string>
     <string name="option_audio_rhythm_cover_color">封面色</string>
     <string name="option_audio_rhythm_cover_gradient">封面渐变色</string>
@@ -655,17 +659,11 @@
     <string name="title_amll_ttml">AMLL TTML 逐字歌词</string>
     <string name="summary_amll_ttml">从 AMLL TTML DataBase 获取高质量逐字歌词（背景人声/翻译/罗马音），未命中时保持当前歌词源</string>
     <string name="summary_lyric_enhancement_unavailable">此歌词增强功能当前不可用</string>
-    <string name="summary_lyric_enhancement_no_settings">此歌词增强功能没有可配置项</string>
     <string name="title_lyric_enhancement_basic_settings">基础设置</string>
     <string name="title_lyric_enhancement_advanced_settings">高级设置</string>
     <string name="title_lyric_enhancement_cache">缓存</string>
     <string name="title_lyric_enhancement_cache_manage">管理缓存</string>
     <string name="summary_lyric_enhancement_cache_manage">查看并删除单首歌曲的缓存</string>
-    <string name="title_lyric_enhancement_clear_cache">清除缓存</string>
-    <string name="summary_lyric_enhancement_cache">删除此功能保存的歌词缓存，不会修改功能设置</string>
-    <string name="summary_lyric_enhancement_cache_clearing">正在清除缓存…</string>
-    <string name="dialog_lyric_enhancement_clear_cache_summary">确定请求 SystemUI 清除此功能的全部缓存吗？</string>
-    <string name="toast_lyric_enhancement_cache_requested">已请求 SystemUI 清除缓存</string>
     <string name="toast_lyric_enhancement_cache_failed">缓存清除失败</string>
     <string name="toast_lyric_enhancement_cache_unavailable">Xposed 服务不可用，请重启 SystemUI 后重试</string>
     <string name="title_amll_ttml_cache">AMLL 歌词缓存</string>
@@ -694,7 +692,6 @@
     <string name="title_ai_translation_target_language">目标语言</string>
     <string name="title_ai_translation_api_key">API Key</string>
     <string name="title_ai_translation_model">模型名称</string>
-    <string name="content_description_ai_translation_search_models">获取可用模型</string>
     <string name="toast_ai_translation_models_api_key_required">请先填写 API Key</string>
     <string name="toast_ai_translation_models_base_url_required">请先填写 OpenAI API 地址</string>
     <string name="toast_ai_translation_models_fetch_failed">获取模型失败，请检查地址、密钥和网络</string>

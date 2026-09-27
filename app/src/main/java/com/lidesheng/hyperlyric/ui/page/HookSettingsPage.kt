@@ -24,6 +24,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.lidesheng.hyperlyric.R
+import com.lidesheng.hyperlyric.common.LyricTypePreference
 import com.lidesheng.hyperlyric.common.PrefsBridge
 import com.lidesheng.hyperlyric.common.RootConstants
 import com.lidesheng.hyperlyric.common.UIConstants
@@ -82,12 +83,12 @@ fun HookSettingsPage() {
             )
         )
     }
+    var outputTarget by remember {
+        mutableIntStateOf(LyricTypePreference.read(prefs))
+    }
     var hookEnabled by remember {
         mutableStateOf(
-            prefs.getBoolean(
-                RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND,
-                RootConstants.DEFAULT_HOOK_ENABLE_SUPER_ISLAND
-            )
+            prefs.getBoolean(RootConstants.KEY_HOOK_ENABLE, RootConstants.DEFAULT_HOOK_ENABLE)
         )
     }
     DisposableEffect(prefs) {
@@ -110,12 +111,14 @@ fun HookSettingsPage() {
                     )
                 }
 
-                RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND -> {
+                RootConstants.KEY_HOOK_LYRIC_TYPE ->
+                    outputTarget = LyricTypePreference.read(sharedPreferences)
+
+                RootConstants.KEY_HOOK_ENABLE ->
                     hookEnabled = sharedPreferences.getBoolean(
-                        RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND,
-                        RootConstants.DEFAULT_HOOK_ENABLE_SUPER_ISLAND
+                        RootConstants.KEY_HOOK_ENABLE,
+                        RootConstants.DEFAULT_HOOK_ENABLE,
                     )
-                }
             }
         }
         prefs.registerOnSharedPreferenceChangeListener(listener)
@@ -144,7 +147,7 @@ fun HookSettingsPage() {
             BlurredBar(backdrop, blurActive) {
                 TopAppBar(
                     color = barColor,
-                    title = stringResource(R.string.title_super_island_lyrics),
+                    title = stringResource(R.string.title_lyric_settings),
                     scrollBehavior = topAppBarScrollBehavior,
                     navigationIcon = {
                         IconButton(onClick = { navigator.pop() }) {
@@ -181,14 +184,12 @@ fun HookSettingsPage() {
             ) {
                 hookSettingsSections(
                     hookEnabled = hookEnabled,
+                    lyricType = outputTarget,
                     onHookEnabledChange = { enabled ->
                         if (enabled) {
                             if (RootApplication.xposedService != null) {
                                 hookEnabled = true
-                                PrefsBridge.putBoolean(
-                                    RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND,
-                                    true
-                                )
+                                PrefsBridge.putBoolean(RootConstants.KEY_HOOK_ENABLE, true)
                             } else {
                                 scope.launch {
                                     snackbarHostState.showSnackbar(
@@ -199,11 +200,12 @@ fun HookSettingsPage() {
                             }
                         } else {
                             hookEnabled = false
-                            PrefsBridge.putBoolean(
-                                RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND,
-                                false
-                            )
+                            PrefsBridge.putBoolean(RootConstants.KEY_HOOK_ENABLE, false)
                         }
+                    },
+                    onOutputTargetChange = { target ->
+                        outputTarget = target
+                        PrefsBridge.putInt(RootConstants.KEY_HOOK_LYRIC_TYPE, target)
                     },
                     lyricSourceLabel = lyricSourceLabel,
                     widthModeLabel = widthModeLabel,
@@ -215,7 +217,9 @@ fun HookSettingsPage() {
 
 private fun LazyListScope.hookSettingsSections(
     hookEnabled: Boolean,
+    lyricType: Int,
     onHookEnabledChange: (Boolean) -> Unit,
+    onOutputTargetChange: (Int) -> Unit,
     lyricSourceLabel: String,
     widthModeLabel: String
 ) {
@@ -226,11 +230,32 @@ private fun LazyListScope.hookSettingsSections(
                 .padding(bottom = 12.dp)
                 .fillMaxWidth()
         ) {
-            SwitchPreference(
-                title = stringResource(R.string.title_enable),
-                checked = hookEnabled,
-                onCheckedChange = onHookEnabledChange,
-            )
+            Column {
+                SwitchPreference(
+                    title = stringResource(R.string.title_enable),
+                    checked = hookEnabled,
+                    onCheckedChange = onHookEnabledChange,
+                )
+                OverlayDropdownPreference(
+                    title = stringResource(R.string.title_lyric_type),
+                    items = listOf(
+                        stringResource(R.string.option_lyric_type_super_island),
+                        stringResource(R.string.option_lyric_type_status_bar),
+                    ),
+                    selectedIndex = lyricType.coerceIn(
+                        RootConstants.LYRIC_TYPE_SUPER_ISLAND,
+                        RootConstants.LYRIC_TYPE_STATUS_BAR,
+                    ),
+                    onSelectedIndexChange = { index ->
+                        onOutputTargetChange(
+                            index.coerceIn(
+                                RootConstants.LYRIC_TYPE_SUPER_ISLAND,
+                                RootConstants.LYRIC_TYPE_STATUS_BAR,
+                            )
+                        )
+                    },
+                )
+            }
         }
     }
     item(key = "custom_config_title") {
@@ -255,23 +280,39 @@ private fun LazyListScope.hookSettingsSections(
                     },
                     onClick = { navigator.navigate(Route.LyricSource) }
                 )
-                ArrowPreference(
-                    title = stringResource(R.string.title_super_island),
-                    endActions = {
-                        Text(
-                            text = widthModeLabel,
-                            fontSize = MiuixTheme.textStyles.body2.fontSize,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantActions
-                        )
-                    },
-                    onClick = { navigator.navigate(Route.SuperIslandSettings) })
+                if (lyricType == RootConstants.LYRIC_TYPE_STATUS_BAR) {
+                    ArrowPreference(
+                        title = stringResource(R.string.title_status_bar),
+                        onClick = { navigator.navigate(Route.StatusBarLyricSettings) },
+                    )
+                } else {
+                    ArrowPreference(
+                        title = stringResource(R.string.title_super_island),
+                        endActions = {
+                            Text(
+                                text = widthModeLabel,
+                                fontSize = MiuixTheme.textStyles.body2.fontSize,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                            )
+                        },
+                        onClick = { navigator.navigate(Route.SuperIslandSettings) },
+                    )
+                }
                 ArrowPreference(
                     title = stringResource(R.string.title_content_layout),
                     summary = stringResource(R.string.summary_content_layout),
                     onClick = { navigator.navigate(Route.SuperIslandContentLayout) })
                 ArrowPreference(
                     title = stringResource(R.string.title_text),
-                    onClick = { navigator.navigate(Route.LyricDisplay) })
+                    onClick = {
+                        navigator.navigate(
+                            if (lyricType == RootConstants.LYRIC_TYPE_STATUS_BAR) {
+                                Route.StatusBarLyricDisplay
+                            } else {
+                                Route.LyricDisplay
+                            }
+                        )
+                    })
                 ArrowPreference(
                     title = stringResource(R.string.title_marquee),
                     onClick = { navigator.navigate(Route.LyricScroll) })

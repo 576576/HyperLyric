@@ -74,7 +74,6 @@ fun AppNavigation(startRoute: Route) {
             entry<Route.VerbatimLyric> { VerbatimLyricPage() }
             entry<Route.StatusBarLyricSettings> { StatusBarLyricSettingsPage() }
             entry<Route.StatusBarLyricDisplay> { LyricDisplayPage(statusBarLyrics = true) }
-            entry<Route.StatusBarLyricScroll> { LyricScrollPage(statusBarLyrics = true) }
             entry<Route.SuperIslandSettings> { SuperIslandSettingsPage() }
             entry<Route.SuperIslandContentLayout> { ContentLayoutPage() }
             entry<Route.MediaCardSettings> { MediaCardSettingsPage() }

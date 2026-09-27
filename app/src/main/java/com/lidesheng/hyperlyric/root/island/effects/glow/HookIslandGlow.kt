@@ -105,8 +105,8 @@ object HookIslandGlow {
         return runCatching {
             val sharedPrefs = prefs ?: return@runCatching null
             if (!sharedPrefs.getBoolean(
-                    RootConstants.KEY_HOOK_ENABLE_SUPER_ISLAND,
-                    RootConstants.DEFAULT_HOOK_ENABLE_SUPER_ISLAND
+                    RootConstants.KEY_HOOK_ENABLE,
+                    RootConstants.DEFAULT_HOOK_ENABLE
                 )
             ) {
                 HookLogger.dState(

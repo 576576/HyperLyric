@@ -36,14 +36,6 @@ internal fun LyricScrollSettings(
     val prefs = rememberHookPrefs(statusBarLyrics)
     val saveConfig = rememberHookConfigSaver(prefs)
 
-    val lyricMode by remember {
-        mutableIntStateOf(
-            prefs.getInt(
-                RootConstants.KEY_HOOK_LYRIC_MODE,
-                RootConstants.DEFAULT_HOOK_LYRIC_MODE
-            )
-        )
-    }
     var marqueeMode by remember {
         mutableStateOf(
             prefs.getBoolean(
@@ -221,7 +213,6 @@ internal fun LyricScrollSettings(
 
     content {
         lyricScrollSections(
-            lyricMode = lyricMode,
             marqueeMode = marqueeMode,
             onMarqueeModeChange = {
                 marqueeMode = it

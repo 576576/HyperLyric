@@ -76,7 +76,7 @@ fun LazyListScope.homePageSections(
         ) {
             Column {
                 ArrowPreference(
-                    title = stringResource(R.string.title_super_island_lyrics),
+                    title = stringResource(R.string.title_lyric_settings),
                     onClick = onSuperIslandConfigClick,
                 )
                 ArrowPreference(

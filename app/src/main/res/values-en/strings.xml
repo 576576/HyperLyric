@@ -92,9 +92,12 @@
 
     <!-- ———————————————————————— HookSettingsPage ———————————————————————— -->
     <string name="title_enable">Enable</string>
+    <string name="title_lyric_type">Lyric type</string>
+    <string name="option_lyric_type_super_island">HyperIsland lyrics</string>
+    <string name="option_lyric_type_status_bar">Status bar lyrics</string>
+    <string name="title_lyric_settings">Lyric Settings</string>
     <string name="title_lyric_source">Lyric Source</string>
-    <string name="title_status_bar_lyrics">Status Bar Lyrics</string>
-    <string name="title_status_bar_lyric_config">Basic Configuration</string>
+    <string name="title_status_bar">Status bar</string>
     <string name="title_status_bar_lyric_layout">Layout</string>
     <string name="title_status_bar_lyric_insertion_order">Insertion position</string>
     <string name="option_status_bar_lyric_before_clock">Before clock</string>
@@ -110,6 +113,7 @@
     <string name="option_status_bar_lyric_icon_after_lyric">After lyrics</string>
     <string name="title_status_bar_lyric_icon_size">Icon size</string>
     <string name="format_status_bar_lyric_icon_size">%1$d dp</string>
+    <string name="label_status_bar_lyric_icon_size_range">Range: %1$d–%2$d dp</string>
     <string name="title_status_bar_lyric_portrait_width">Maximum width in portrait</string>
     <string name="title_status_bar_lyric_landscape_width">Maximum width in landscape</string>
     <string name="format_status_bar_lyric_width_value">%1$d dp</string>
@@ -197,8 +201,8 @@
 
     <string name="title_hide_media_time">Hide progress time</string>
     <string name="title_hide_media_custom_actions">Hide custom action buttons</string>
-    <string name="title_disable_media_cover_flip">Disable audio cover flip animation</string>
-    <string name="title_hide_audio_cover_shadow">Hide audio cover shadow</string>
+    <string name="title_disable_media_cover_flip">Disable music cover flip animation</string>
+    <string name="title_hide_audio_cover_shadow">Hide music cover shadow</string>
     <string name="title_media_progress_style">Progress bar style</string>
     <string name="option_media_progress_style_default">Default</string>
     <string name="option_media_progress_style_wave">Wave</string>
@@ -489,9 +493,9 @@
     <string name="title_right_padding">Right Content Padding</string>
     <string name="label_left_padding">Left Padding</string>
     <string name="label_right_padding">Right Padding</string>
-    <string name="title_audio_cover">Audio Cover</string>
-    <string name="title_audio_cover_style">Audio cover style</string>
-    <string name="title_hide_audio_cover_source">Hide audio cover source badge</string>
+    <string name="title_audio_cover">Music Cover</string>
+    <string name="title_audio_cover_style">Music cover style</string>
+    <string name="title_hide_audio_cover_source">Hide music cover source badge</string>
     <string name="title_hide_media_device_switch">Hide device switch button</string>
     <string name="option_audio_cover_style_default">Default</string>
     <string name="option_audio_cover_style_circle">Circular cover</string>
@@ -499,7 +503,7 @@
     <string name="option_audio_cover_style_app_icon">App icon</string>
     <string name="option_audio_cover_style_monochrome">Monochrome icon</string>
     <string name="option_audio_cover_style_hidden">Hide cover</string>
-    <string name="title_audio_rhythm">Audio Rhythm</string>
+    <string name="title_audio_rhythm">Music Rhythm</string>
     <string name="option_audio_rhythm_default">Default</string>
     <string name="option_audio_rhythm_cover_color">Cover color</string>
     <string name="option_audio_rhythm_cover_gradient">Cover gradient</string>
@@ -646,17 +650,11 @@
     <string name="title_amll_ttml">AMLL TTML Lyrics</string>
     <string name="summary_amll_ttml">Fetch high-quality word-level lyrics (background vocals/translation/roma) from the AMLL TTML database; falls back to the current lyric source on miss</string>
     <string name="summary_lyric_enhancement_unavailable">This lyric enhancement is currently unavailable</string>
-    <string name="summary_lyric_enhancement_no_settings">This lyric enhancement has no configurable settings</string>
     <string name="title_lyric_enhancement_basic_settings">Basic Settings</string>
     <string name="title_lyric_enhancement_advanced_settings">Advanced Settings</string>
     <string name="title_lyric_enhancement_cache">Cache</string>
     <string name="title_lyric_enhancement_cache_manage">Manage Cache</string>
     <string name="summary_lyric_enhancement_cache_manage">View and delete the cache for individual songs</string>
-    <string name="title_lyric_enhancement_clear_cache">Clear Cache</string>
-    <string name="summary_lyric_enhancement_cache">Delete the lyric cache for this feature without changing its settings</string>
-    <string name="summary_lyric_enhancement_cache_clearing">Clearing cache…</string>
-    <string name="dialog_lyric_enhancement_clear_cache_summary">Ask SystemUI to clear all cache saved by this feature?</string>
-    <string name="toast_lyric_enhancement_cache_requested">SystemUI was asked to clear the cache</string>
     <string name="toast_lyric_enhancement_cache_failed">Failed to clear cache</string>
     <string name="toast_lyric_enhancement_cache_unavailable">Xposed service is unavailable; restart SystemUI and try again</string>
     <string name="title_amll_ttml_cache">AMLL Lyrics Cache</string>
@@ -685,7 +683,6 @@
     <string name="title_ai_translation_target_language">Target Language</string>
     <string name="title_ai_translation_api_key">API Key</string>
     <string name="title_ai_translation_model">Model Name</string>
-    <string name="content_description_ai_translation_search_models">Load available models</string>
     <string name="toast_ai_translation_models_api_key_required">Enter an API key first</string>
     <string name="toast_ai_translation_models_base_url_required">Enter an API base URL first</string>
     <string name="toast_ai_translation_models_fetch_failed">Failed to load models. Check the URL, key, and network.</string>

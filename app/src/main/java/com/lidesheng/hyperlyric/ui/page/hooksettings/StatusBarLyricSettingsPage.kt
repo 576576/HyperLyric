@@ -3,55 +3,34 @@ package com.lidesheng.hyperlyric.ui.page.hooksettings
 import android.content.SharedPreferences
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.lidesheng.hyperlyric.R
-import com.lidesheng.hyperlyric.common.PrefsBridge
 import com.lidesheng.hyperlyric.common.RootConstants
-import com.lidesheng.hyperlyric.common.StatusBarLyricPreferences
 import com.lidesheng.hyperlyric.ui.component.NumberInputDialog
-import com.lidesheng.hyperlyric.ui.page.hooksettings.lyrics.display.LyricDisplaySettings
-import com.lidesheng.hyperlyric.ui.page.hooksettings.lyrics.common.XposedLyricSettingPage
 import com.lidesheng.hyperlyric.ui.page.hooksettings.lyrics.common.rememberHookConfigSaver
 import com.lidesheng.hyperlyric.ui.page.hooksettings.lyrics.common.rememberHookPrefs
-import com.lidesheng.hyperlyric.ui.utils.pageScrollModifiers
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import com.lidesheng.hyperlyric.ui.page.hooksettings.lyrics.common.XposedLyricSettingPage
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Slider
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TabRow
-import top.yukonga.miuix.kmp.basic.TabRowDefaults
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.preference.ArrowPreference
@@ -73,39 +52,11 @@ private data class StatusBarLyricGestureDropdown(
 
 @Composable
 fun StatusBarLyricSettingsPage() {
-    val sharedPrefs = rememberHookPrefs()
-    val initialized = remember(sharedPrefs) {
-        StatusBarLyricPreferences.initializeFromShared(sharedPrefs)
-    }
-    LaunchedEffect(sharedPrefs, initialized) {
-        if (initialized) withContext(Dispatchers.IO) { PrefsBridge.syncAllToRemote() }
-    }
-
     val prefs = rememberHookPrefs(statusBarLyrics = true)
     val saveConfig = rememberHookConfigSaver(prefs)
     val portraitWidthLimit = RootConstants.STATUS_BAR_LYRIC_PORTRAIT_MAX_WIDTH_DP
     val landscapeWidthLimit = RootConstants.STATUS_BAR_LYRIC_LANDSCAPE_MAX_WIDTH_DP
 
-    var statusBarLyricsEnabled by remember(prefs) {
-        mutableStateOf(
-            prefs.getBoolean(
-                StatusBarLyricPreferences.KEY_ENABLED,
-                StatusBarLyricPreferences.DEFAULT_ENABLED
-            )
-        )
-    }
-    DisposableEffect(prefs) {
-        val listener = SharedPreferences.OnSharedPreferenceChangeListener { changedPrefs, key ->
-            if (key == StatusBarLyricPreferences.KEY_ENABLED) {
-                statusBarLyricsEnabled = changedPrefs.getBoolean(
-                    StatusBarLyricPreferences.KEY_ENABLED,
-                    StatusBarLyricPreferences.DEFAULT_ENABLED,
-                )
-            }
-        }
-        prefs.registerOnSharedPreferenceChangeListener(listener)
-        onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
-    }
     var insertionOrder by remember(prefs) {
         mutableIntStateOf(
             prefs.getInt(
@@ -195,6 +146,7 @@ fun StatusBarLyricSettingsPage() {
     var showPaddingDialog by remember { mutableStateOf(false) }
     var showPortraitMaxWidthDialog by remember { mutableStateOf(false) }
     var showLandscapeMaxWidthDialog by remember { mutableStateOf(false) }
+    var showIconSizeDialog by remember { mutableStateOf(false) }
     var clockHideBehavior by remember(prefs) {
         mutableIntStateOf(
             prefs.getInt(
@@ -338,189 +290,110 @@ fun StatusBarLyricSettingsPage() {
         ),
     )
 
-    val tabs = listOf(
-        stringResource(R.string.title_status_bar_lyric_config),
-        stringResource(R.string.title_custom_config),
-    )
-    val pagerState = rememberPagerState { tabs.size }
-    val coroutineScope = rememberCoroutineScope()
-    val basicConfigListState = rememberLazyListState()
-    val textStyleListState = rememberLazyListState()
-
-    LyricDisplaySettings(statusBarLyrics = true) { displaySections ->
-        XposedLyricSettingPage(
-            title = stringResource(R.string.title_status_bar_lyrics),
-            topBarBottomContent = {
-                Column {
-                    Card(
-                        modifier = Modifier
-                            .padding(horizontal = 12.dp)
-                            .padding(bottom = 12.dp)
-                            .fillMaxWidth()
-                    ) {
-                        SwitchPreference(
-                            title = stringResource(R.string.title_enable),
-                            checked = statusBarLyricsEnabled,
-                            onCheckedChange = { enabled ->
-                                statusBarLyricsEnabled = enabled
-                                saveConfig(StatusBarLyricPreferences.KEY_ENABLED, enabled)
-                            },
+    XposedLyricSettingPage(
+        title = stringResource(R.string.title_status_bar),
+        content = {
+            item(key = "status_bar_lyric_layout") {
+                statusBarLyricLayoutSections(
+                    insertionOrder = insertionOrder,
+                    onInsertionOrderChange = { order ->
+                        insertionOrder = order
+                        saveConfig(RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_INSERTION_ORDER, order)
+                    },
+                    portraitWidthLimit = portraitWidthLimit,
+                    portraitMaxWidth = portraitMaxWidth,
+                    onPortraitMaxWidthChange = { portraitMaxWidth = it },
+                    onPortraitMaxWidthClick = { showPortraitMaxWidthDialog = true },
+                    onPortraitMaxWidthCommit = {
+                        saveConfig(
+                            RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_PORTRAIT_DYNAMIC_MAX_WIDTH,
+                            portraitMaxWidth,
                         )
-                    }
-                    TabRow(
-                        tabs = tabs,
-                        selectedTabIndex = pagerState.currentPage,
-                        onTabSelected = { index ->
-                            coroutineScope.launch { pagerState.scrollToPage(index) }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp)
-                            .padding(bottom = 12.dp),
-                        colors = TabRowDefaults.tabRowColors(backgroundColor = Color.Transparent),
-                    )
-                }
-            },
-            pageContent = { innerPadding, scrollBehavior ->
-                val topPadding = innerPadding.calculateTopPadding()
-                val bottomPadding = innerPadding.calculateBottomPadding()
-                val pageContentPadding = remember(topPadding, bottomPadding) {
-                    PaddingValues(top = topPadding, bottom = bottomPadding + 16.dp)
-                }
-                HorizontalPager(
-                    state = pagerState,
-                    modifier = Modifier.fillMaxSize(),
-                    verticalAlignment = Alignment.Top,
-                ) { page ->
-                    val listState = if (page == 0) {
-                        basicConfigListState
-                    } else {
-                        textStyleListState
-                    }
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.pageScrollModifiers(
-                            enableScrollEndHaptic = true,
-                            showTopAppBar = true,
-                            topAppBarScrollBehavior = scrollBehavior,
-                        ),
-                        contentPadding = pageContentPadding,
-                    ) {
-                        if (page == 0) {
-                            statusBarLyricLayoutSections(
-                                insertionOrder = insertionOrder,
-                                onInsertionOrderChange = { order ->
-                                    insertionOrder = order
-                                    saveConfig(
-                                        RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_INSERTION_ORDER,
-                                        order,
-                                    )
-                                },
-                                portraitWidthLimit = portraitWidthLimit,
-                                portraitMaxWidth = portraitMaxWidth,
-                                onPortraitMaxWidthChange = { portraitMaxWidth = it },
-                                onPortraitMaxWidthClick = { showPortraitMaxWidthDialog = true },
-                                onPortraitMaxWidthCommit = {
-                                    saveConfig(
-                                        RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_PORTRAIT_DYNAMIC_MAX_WIDTH,
-                                        portraitMaxWidth,
-                                    )
-                                },
-                                landscapeWidthLimit = landscapeWidthLimit,
-                                landscapeMaxWidth = landscapeMaxWidth,
-                                onLandscapeMaxWidthChange = { landscapeMaxWidth = it },
-                                onLandscapeMaxWidthClick = { showLandscapeMaxWidthDialog = true },
-                                onLandscapeMaxWidthCommit = {
-                                    saveConfig(
-                                        RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_LANDSCAPE_DYNAMIC_MAX_WIDTH,
-                                        landscapeMaxWidth,
-                                    )
-                                },
-                                paddingLeftDp = paddingLeftDp,
-                                paddingRightDp = paddingRightDp,
-                                onPaddingClick = { showPaddingDialog = true },
-                                adjustWidthForSuperIsland = adjustWidthForSuperIsland,
-                                onAdjustWidthForSuperIslandChange = { enabled ->
-                                    adjustWidthForSuperIsland = enabled
-                                    saveConfig(
-                                        RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_ADJUST_WIDTH_FOR_SUPER_ISLAND,
-                                        enabled,
-                                    )
-                                },
-                            )
-                            statusBarLyricVisibilitySections(
-                                clockHideBehavior = clockHideBehavior,
-                                onClockHideBehaviorChange = { behavior ->
-                                    clockHideBehavior = behavior
-                                    saveConfig(
-                                        RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_CLOCK_HIDE_BEHAVIOR,
-                                        behavior,
-                                    )
-                                },
-                                islandHideBehavior = islandHideBehavior,
-                                onIslandHideBehaviorChange = { behavior ->
-                                    islandHideBehavior = behavior
-                                    saveConfig(
-                                        RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_ISLAND_HIDE_BEHAVIOR,
-                                        behavior,
-                                    )
-                                },
-                                hideOnLockScreen = hideOnLockScreen,
-                                onHideOnLockScreenChange = { hidden ->
-                                    hideOnLockScreen = hidden
-                                    saveConfig(
-                                        RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_HIDE_ON_LOCK_SCREEN,
-                                        hidden,
-                                    )
-                                },
-                            )
-                            statusBarLyricInteractionSection(
-                                dropdowns = interactionDropdowns,
-                                hapticFeedbackEnabled = gestureHapticFeedbackEnabled,
-                                onHapticFeedbackEnabledChange = { enabled ->
-                                    gestureHapticFeedbackEnabled = enabled
-                                    saveConfig(
-                                        RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_GESTURE_HAPTIC_FEEDBACK,
-                                        enabled,
-                                    )
-                                },
-                            )
-                        } else {
-                            statusBarLyricIconSections(
-                                iconEnabled = iconEnabled,
-                                onIconEnabledChange = { enabled ->
-                                    iconEnabled = enabled
-                                    saveConfig(
-                                        RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_ICON_ENABLED,
-                                        enabled,
-                                    )
-                                },
-                                iconStyle = iconStyle,
-                                onIconStyleChange = { style ->
-                                    iconStyle = style
-                                    saveConfig(RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_ICON_STYLE, style)
-                                },
-                                iconOrder = iconOrder,
-                                onIconOrderChange = { order ->
-                                    iconOrder = order
-                                    saveConfig(RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_ICON_ORDER, order)
-                                },
-                                iconSizeDp = iconSizeDp,
-                                onIconSizeChange = { iconSizeDp = it },
-                                onIconSizeCommit = {
-                                    saveConfig(
-                                        RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_ICON_SIZE_DP,
-                                        iconSizeDp,
-                                    )
-                                },
-                            )
-                            displaySections()
-                        }
-                    }
-                }
-            },
-        )
-    }
+                    },
+                    landscapeWidthLimit = landscapeWidthLimit,
+                    landscapeMaxWidth = landscapeMaxWidth,
+                    onLandscapeMaxWidthChange = { landscapeMaxWidth = it },
+                    onLandscapeMaxWidthClick = { showLandscapeMaxWidthDialog = true },
+                    onLandscapeMaxWidthCommit = {
+                        saveConfig(
+                            RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_LANDSCAPE_DYNAMIC_MAX_WIDTH,
+                            landscapeMaxWidth,
+                        )
+                    },
+                    paddingLeftDp = paddingLeftDp,
+                    paddingRightDp = paddingRightDp,
+                    onPaddingClick = { showPaddingDialog = true },
+                    adjustWidthForSuperIsland = adjustWidthForSuperIsland,
+                    onAdjustWidthForSuperIslandChange = { enabled ->
+                        adjustWidthForSuperIsland = enabled
+                        saveConfig(
+                            RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_ADJUST_WIDTH_FOR_SUPER_ISLAND,
+                            enabled,
+                        )
+                    },
+                )
+            }
+            item(key = "status_bar_lyric_display_behavior") {
+                statusBarLyricVisibilitySections(
+                    clockHideBehavior = clockHideBehavior,
+                    onClockHideBehaviorChange = { behavior ->
+                        clockHideBehavior = behavior
+                        saveConfig(
+                            RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_CLOCK_HIDE_BEHAVIOR,
+                            behavior,
+                        )
+                    },
+                    islandHideBehavior = islandHideBehavior,
+                    onIslandHideBehaviorChange = { behavior ->
+                        islandHideBehavior = behavior
+                        saveConfig(
+                            RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_ISLAND_HIDE_BEHAVIOR,
+                            behavior,
+                        )
+                    },
+                    hideOnLockScreen = hideOnLockScreen,
+                    onHideOnLockScreenChange = { hidden ->
+                        hideOnLockScreen = hidden
+                        saveConfig(RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_HIDE_ON_LOCK_SCREEN, hidden)
+                    },
+                )
+            }
+            item(key = "status_bar_lyric_interaction") {
+                statusBarLyricInteractionSection(
+                    dropdowns = interactionDropdowns,
+                    hapticFeedbackEnabled = gestureHapticFeedbackEnabled,
+                    onHapticFeedbackEnabledChange = { enabled ->
+                        gestureHapticFeedbackEnabled = enabled
+                        saveConfig(
+                            RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_GESTURE_HAPTIC_FEEDBACK,
+                            enabled,
+                        )
+                    },
+                )
+            }
+            item(key = "status_bar_lyric_icon") {
+                statusBarLyricIconSections(
+                    iconEnabled = iconEnabled,
+                    onIconEnabledChange = { enabled ->
+                        iconEnabled = enabled
+                        saveConfig(RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_ICON_ENABLED, enabled)
+                    },
+                    iconStyle = iconStyle,
+                    onIconStyleChange = { style ->
+                        iconStyle = style
+                        saveConfig(RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_ICON_STYLE, style)
+                    },
+                    iconOrder = iconOrder,
+                    onIconOrderChange = { order ->
+                        iconOrder = order
+                        saveConfig(RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_ICON_ORDER, order)
+                    },
+                    iconSizeDp = iconSizeDp,
+                    onIconSizeClick = { showIconSizeDialog = true },
+                )
+            }
+        },
+    )
 
     NumberInputDialog(
         show = showPortraitMaxWidthDialog,
@@ -556,6 +429,23 @@ fun StatusBarLyricSettingsPage() {
             saveConfig(RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_LANDSCAPE_DYNAMIC_MAX_WIDTH, value)
         },
     )
+    NumberInputDialog(
+        show = showIconSizeDialog,
+        title = stringResource(R.string.title_status_bar_lyric_icon_size),
+        label = stringResource(
+            R.string.label_status_bar_lyric_icon_size_range,
+            RootConstants.STATUS_BAR_LYRIC_ICON_MIN_SIZE_DP,
+            RootConstants.STATUS_BAR_LYRIC_ICON_MAX_SIZE_DP,
+        ),
+        initialValue = iconSizeDp,
+        min = RootConstants.STATUS_BAR_LYRIC_ICON_MIN_SIZE_DP,
+        max = RootConstants.STATUS_BAR_LYRIC_ICON_MAX_SIZE_DP,
+        onDismiss = { showIconSizeDialog = false },
+        onConfirm = { value ->
+            iconSizeDp = value
+            saveConfig(RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_ICON_SIZE_DP, value)
+        },
+    )
     StatusBarLyricPaddingDialog(
         show = showPaddingDialog,
         leftDp = paddingLeftDp,
@@ -571,7 +461,8 @@ fun StatusBarLyricSettingsPage() {
 }
 
 @Suppress("LongParameterList")
-private fun LazyListScope.statusBarLyricIconSections(
+@Composable
+private fun statusBarLyricIconSections(
     iconEnabled: Boolean,
     onIconEnabledChange: (Boolean) -> Unit,
     iconStyle: Int,
@@ -579,67 +470,61 @@ private fun LazyListScope.statusBarLyricIconSections(
     iconOrder: Int,
     onIconOrderChange: (Int) -> Unit,
     iconSizeDp: Int,
-    onIconSizeChange: (Int) -> Unit,
-    onIconSizeCommit: () -> Unit,
+    onIconSizeClick: () -> Unit,
 ) {
-    item(key = "status_bar_lyric_icon_title") {
-        SmallTitle(text = stringResource(R.string.title_status_bar_lyric_icon))
-    }
-    item(key = "status_bar_lyric_icon") {
-        val styles = listOf(
-            RootConstants.STATUS_BAR_LYRIC_ICON_MUSIC_COVER,
-            RootConstants.STATUS_BAR_LYRIC_ICON_CIRCLE_COVER,
-            RootConstants.STATUS_BAR_LYRIC_ICON_ROTATING_COVER,
-            RootConstants.STATUS_BAR_LYRIC_ICON_APP,
-            RootConstants.STATUS_BAR_LYRIC_ICON_MONOCHROME,
-        )
-        val styleItems = listOf(
-            stringResource(R.string.option_status_bar_lyric_icon_music_cover),
-            stringResource(R.string.option_status_bar_lyric_icon_circle_cover),
-            stringResource(R.string.option_status_bar_lyric_icon_rotating_cover),
-            stringResource(R.string.option_status_bar_lyric_icon_app),
-            stringResource(R.string.option_status_bar_lyric_icon_monochrome),
-        )
-        val orderItems = listOf(
-            stringResource(R.string.option_status_bar_lyric_icon_before_lyric),
-            stringResource(R.string.option_status_bar_lyric_icon_after_lyric),
-        )
-        Card(
-            modifier = Modifier
-                .padding(horizontal = 12.dp)
-                .padding(bottom = 12.dp)
-                .fillMaxWidth()
-        ) {
-            Column {
-                SwitchPreference(
-                    title = stringResource(R.string.title_enable),
-                    checked = iconEnabled,
-                    onCheckedChange = onIconEnabledChange,
-                )
-                OverlayDropdownPreference(
-                    title = stringResource(R.string.title_status_bar_lyric_icon_style),
-                    items = styleItems,
-                    selectedIndex = styles.indexOf(iconStyle).coerceAtLeast(0),
-                    onSelectedIndexChange = { index ->
-                        styles.getOrNull(index)?.let(onIconStyleChange)
-                    },
-                )
-                OverlayDropdownPreference(
-                    title = stringResource(R.string.title_status_bar_lyric_insertion_order),
-                    items = orderItems,
-                    selectedIndex = iconOrder.coerceIn(0, 1),
-                    onSelectedIndexChange = { index ->
-                        if (index == RootConstants.STATUS_BAR_LYRIC_ICON_BEFORE_LYRIC ||
-                            index == RootConstants.STATUS_BAR_LYRIC_ICON_AFTER_LYRIC
-                        ) onIconOrderChange(index)
-                    },
-                )
-                StatusBarLyricIconSizeControl(
-                    sizeDp = iconSizeDp,
-                    onSizeChange = onIconSizeChange,
-                    onSizeCommit = onIconSizeCommit,
-                )
-            }
+    SmallTitle(text = stringResource(R.string.title_status_bar_lyric_icon))
+    val styles = listOf(
+        RootConstants.STATUS_BAR_LYRIC_ICON_MUSIC_COVER,
+        RootConstants.STATUS_BAR_LYRIC_ICON_CIRCLE_COVER,
+        RootConstants.STATUS_BAR_LYRIC_ICON_ROTATING_COVER,
+        RootConstants.STATUS_BAR_LYRIC_ICON_APP,
+        RootConstants.STATUS_BAR_LYRIC_ICON_MONOCHROME,
+    )
+    val styleItems = listOf(
+        stringResource(R.string.option_status_bar_lyric_icon_music_cover),
+        stringResource(R.string.option_status_bar_lyric_icon_circle_cover),
+        stringResource(R.string.option_status_bar_lyric_icon_rotating_cover),
+        stringResource(R.string.option_status_bar_lyric_icon_app),
+        stringResource(R.string.option_status_bar_lyric_icon_monochrome),
+    )
+    val orderItems = listOf(
+        stringResource(R.string.option_status_bar_lyric_icon_before_lyric),
+        stringResource(R.string.option_status_bar_lyric_icon_after_lyric),
+    )
+    Card(
+        modifier = Modifier
+            .padding(horizontal = 12.dp)
+            .padding(bottom = 12.dp)
+            .fillMaxWidth()
+    ) {
+        Column {
+            SwitchPreference(
+                title = stringResource(R.string.title_enable),
+                checked = iconEnabled,
+                onCheckedChange = onIconEnabledChange,
+            )
+            OverlayDropdownPreference(
+                title = stringResource(R.string.title_status_bar_lyric_icon_style),
+                items = styleItems,
+                selectedIndex = styles.indexOf(iconStyle).coerceAtLeast(0),
+                onSelectedIndexChange = { index ->
+                    styles.getOrNull(index)?.let(onIconStyleChange)
+                },
+            )
+            OverlayDropdownPreference(
+                title = stringResource(R.string.title_status_bar_lyric_insertion_order),
+                items = orderItems,
+                selectedIndex = iconOrder.coerceIn(0, 1),
+                onSelectedIndexChange = { index ->
+                    if (index == RootConstants.STATUS_BAR_LYRIC_ICON_BEFORE_LYRIC ||
+                        index == RootConstants.STATUS_BAR_LYRIC_ICON_AFTER_LYRIC
+                    ) onIconOrderChange(index)
+                },
+            )
+            StatusBarLyricIconSizeControl(
+                sizeDp = iconSizeDp,
+                onClick = onIconSizeClick,
+            )
         }
     }
 }
@@ -647,8 +532,7 @@ private fun LazyListScope.statusBarLyricIconSections(
 @Composable
 private fun StatusBarLyricIconSizeControl(
     sizeDp: Int,
-    onSizeChange: (Int) -> Unit,
-    onSizeCommit: () -> Unit,
+    onClick: () -> Unit,
 ) {
     ArrowPreference(
         title = stringResource(R.string.title_status_bar_lyric_icon_size),
@@ -659,71 +543,49 @@ private fun StatusBarLyricIconSizeControl(
                 color = MiuixTheme.colorScheme.onSurfaceVariantActions,
             )
         },
-        onClick = {},
-        bottomAction = {
-            Slider(
-                value = sizeDp.coerceIn(
-                    RootConstants.STATUS_BAR_LYRIC_ICON_MIN_SIZE_DP,
-                    RootConstants.STATUS_BAR_LYRIC_ICON_MAX_SIZE_DP,
-                ).toFloat(),
-                onValueChange = { value ->
-                    onSizeChange(
-                        value.roundToInt().coerceIn(
-                            RootConstants.STATUS_BAR_LYRIC_ICON_MIN_SIZE_DP,
-                            RootConstants.STATUS_BAR_LYRIC_ICON_MAX_SIZE_DP,
-                        )
-                    )
-                },
-                valueRange = RootConstants.STATUS_BAR_LYRIC_ICON_MIN_SIZE_DP.toFloat()..
-                        RootConstants.STATUS_BAR_LYRIC_ICON_MAX_SIZE_DP.toFloat(),
-                steps = 0,
-                onValueChangeFinished = onSizeCommit,
-            )
-        },
+        onClick = onClick,
     )
 }
 
-private fun LazyListScope.statusBarLyricInteractionSection(
+@Composable
+private fun statusBarLyricInteractionSection(
     dropdowns: List<StatusBarLyricGestureDropdown>,
     hapticFeedbackEnabled: Boolean,
     onHapticFeedbackEnabledChange: (Boolean) -> Unit,
 ) {
-    item(key = "status_bar_lyric_interaction_title") {
-        SmallTitle(text = stringResource(R.string.title_interaction))
-    }
-    item(key = "status_bar_lyric_interaction") {
-        Card(
-            modifier = Modifier
-                .padding(horizontal = 12.dp)
-                .padding(bottom = 12.dp)
-                .fillMaxWidth()
-        ) {
-            Column {
-                SwitchPreference(
-                    title = stringResource(R.string.title_status_bar_lyric_haptic_feedback),
-                    checked = hapticFeedbackEnabled,
-                    onCheckedChange = onHapticFeedbackEnabledChange,
+    SmallTitle(text = stringResource(R.string.title_interaction))
+    Card(
+        modifier = Modifier
+            .padding(horizontal = 12.dp)
+            .padding(bottom = 12.dp)
+            .fillMaxWidth()
+    ) {
+        Column {
+            SwitchPreference(
+                title = stringResource(R.string.title_status_bar_lyric_haptic_feedback),
+                checked = hapticFeedbackEnabled,
+                onCheckedChange = onHapticFeedbackEnabledChange,
+            )
+            dropdowns.forEach { dropdown ->
+                OverlayDropdownPreference(
+                    title = dropdown.title,
+                    items = dropdown.items,
+                    selectedIndex = dropdown.values.indexOf(dropdown.selectedValue)
+                        .coerceAtLeast(0),
+                    onSelectedIndexChange = { index ->
+                        dropdown.values.getOrNull(index)?.let(
+                            dropdown.onSelectedValueChange
+                        )
+                    },
                 )
-                dropdowns.forEach { dropdown ->
-                    OverlayDropdownPreference(
-                        title = dropdown.title,
-                        items = dropdown.items,
-                        selectedIndex = dropdown.values.indexOf(dropdown.selectedValue)
-                            .coerceAtLeast(0),
-                        onSelectedIndexChange = { index ->
-                            dropdown.values.getOrNull(index)?.let(
-                                dropdown.onSelectedValueChange
-                            )
-                        },
-                    )
-                }
             }
         }
     }
 }
 
 @Suppress("LongParameterList")
-private fun LazyListScope.statusBarLyricLayoutSections(
+@Composable
+private fun statusBarLyricLayoutSections(
     insertionOrder: Int,
     onInsertionOrderChange: (Int) -> Unit,
     portraitWidthLimit: Int,
@@ -742,64 +604,67 @@ private fun LazyListScope.statusBarLyricLayoutSections(
     adjustWidthForSuperIsland: Boolean,
     onAdjustWidthForSuperIslandChange: (Boolean) -> Unit,
 ) {
-    item(key = "status_bar_lyric_layout_title") {
-        SmallTitle(text = stringResource(R.string.title_status_bar_lyric_layout))
-    }
-
-    item(key = "status_bar_lyric_layout") {
-        val insertionOptions = listOf(
-            stringResource(R.string.option_status_bar_lyric_before_clock),
-            stringResource(R.string.option_status_bar_lyric_after_clock),
-        )
-        Card(
-            modifier = Modifier
-                .padding(horizontal = 12.dp)
-                .padding(bottom = 12.dp)
-                .fillMaxWidth()
-        ) {
-            Column {
-                OverlayDropdownPreference(
-                    title = stringResource(R.string.title_status_bar_lyric_insertion_order),
-                    items = insertionOptions,
-                    selectedIndex = insertionOrder,
-                    onSelectedIndexChange = onInsertionOrderChange,
-                )
-                StatusBarLyricWidthControl(
-                    title = stringResource(R.string.title_status_bar_lyric_portrait_width),
-                    maxWidth = portraitMaxWidth,
-                    widthLimit = portraitWidthLimit,
-                    onMaxWidthChange = onPortraitMaxWidthChange,
-                    onMaxWidthClick = onPortraitMaxWidthClick,
-                    onMaxWidthCommit = onPortraitMaxWidthCommit,
-                )
-                StatusBarLyricWidthControl(
-                    title = stringResource(R.string.title_status_bar_lyric_landscape_width),
-                    maxWidth = landscapeMaxWidth,
-                    widthLimit = landscapeWidthLimit,
-                    onMaxWidthChange = onLandscapeMaxWidthChange,
-                    onMaxWidthClick = onLandscapeMaxWidthClick,
-                    onMaxWidthCommit = onLandscapeMaxWidthCommit,
-                )
-                ArrowPreference(
-                    title = stringResource(R.string.title_status_bar_lyric_padding),
-                    summary = stringResource(
-                        R.string.summary_status_bar_lyric_padding_values,
-                        formatStatusBarLyricPaddingDp(paddingLeftDp),
-                        formatStatusBarLyricPaddingDp(paddingRightDp),
-                    ),
-                    onClick = onPaddingClick,
-                )
-                SwitchPreference(
-                    title = stringResource(R.string.title_status_bar_lyric_adjust_width_for_super_island),
-                    checked = adjustWidthForSuperIsland,
-                    onCheckedChange = onAdjustWidthForSuperIslandChange,
-                )
-            }
+    SmallTitle(text = stringResource(R.string.title_status_bar_lyric_layout))
+    val insertionOptions = listOf(
+        stringResource(R.string.option_status_bar_lyric_before_clock),
+        stringResource(R.string.option_status_bar_lyric_after_clock),
+    )
+    Card(
+        modifier = Modifier
+            .padding(horizontal = 12.dp)
+            .padding(bottom = 12.dp)
+            .fillMaxWidth()
+    ) {
+        Column {
+            OverlayDropdownPreference(
+                title = stringResource(R.string.title_status_bar_lyric_insertion_order),
+                items = insertionOptions,
+                selectedIndex = insertionOrder,
+                onSelectedIndexChange = onInsertionOrderChange,
+            )
+            StatusBarLyricWidthControl(
+                title = stringResource(R.string.title_status_bar_lyric_portrait_width),
+                maxWidth = portraitMaxWidth,
+                widthLimit = portraitWidthLimit,
+                onMaxWidthChange = onPortraitMaxWidthChange,
+                onMaxWidthClick = onPortraitMaxWidthClick,
+                onMaxWidthCommit = onPortraitMaxWidthCommit,
+            )
+            StatusBarLyricWidthControl(
+                title = stringResource(R.string.title_status_bar_lyric_landscape_width),
+                maxWidth = landscapeMaxWidth,
+                widthLimit = landscapeWidthLimit,
+                onMaxWidthChange = onLandscapeMaxWidthChange,
+                onMaxWidthClick = onLandscapeMaxWidthClick,
+                onMaxWidthCommit = onLandscapeMaxWidthCommit,
+            )
+            ArrowPreference(
+                title = stringResource(R.string.title_status_bar_lyric_padding),
+                summary = stringResource(
+                    R.string.summary_status_bar_lyric_padding_values,
+                    formatStatusBarLyricPaddingDp(paddingLeftDp),
+                    formatStatusBarLyricPaddingDp(paddingRightDp),
+                ),
+                onClick = onPaddingClick,
+            )
         }
+    }
+    Card(
+        modifier = Modifier
+            .padding(horizontal = 12.dp)
+            .padding(bottom = 12.dp)
+            .fillMaxWidth()
+    ) {
+        SwitchPreference(
+            title = stringResource(R.string.title_status_bar_lyric_adjust_width_for_super_island),
+            checked = adjustWidthForSuperIsland,
+            onCheckedChange = onAdjustWidthForSuperIslandChange,
+        )
     }
 }
 
-private fun LazyListScope.statusBarLyricVisibilitySections(
+@Composable
+private fun statusBarLyricVisibilitySections(
     clockHideBehavior: Int,
     onClockHideBehaviorChange: (Int) -> Unit,
     islandHideBehavior: Int,
@@ -807,45 +672,40 @@ private fun LazyListScope.statusBarLyricVisibilitySections(
     hideOnLockScreen: Boolean,
     onHideOnLockScreenChange: (Boolean) -> Unit,
 ) {
-    item(key = "status_bar_lyric_visibility_title") {
-        SmallTitle(text = stringResource(R.string.title_status_bar_lyric_behavior))
+    SmallTitle(text = stringResource(R.string.title_status_bar_lyric_behavior))
+    Card(
+        modifier = Modifier
+            .padding(horizontal = 12.dp)
+            .padding(bottom = 12.dp)
+            .fillMaxWidth()
+    ) {
+        Column {
+            OverlayDropdownPreference(
+                title = stringResource(R.string.title_status_bar_lyric_clock_hide_behavior),
+                items = listOf(
+                    stringResource(R.string.option_status_bar_lyric_clock_hide_never),
+                    stringResource(R.string.option_status_bar_lyric_clock_hide_playing),
+                    stringResource(R.string.option_status_bar_lyric_clock_hide_island),
+                ),
+                selectedIndex = clockHideBehavior,
+                onSelectedIndexChange = onClockHideBehaviorChange,
+            )
+            OverlayDropdownPreference(
+                title = stringResource(R.string.title_status_bar_lyric_island_hide_behavior),
+                items = listOf(
+                    stringResource(R.string.option_status_bar_lyric_island_hide_none),
+                    stringResource(R.string.option_status_bar_lyric_island_hide_playing),
+                    stringResource(R.string.option_status_bar_lyric_island_hide_always),
+                ),
+                selectedIndex = islandHideBehavior,
+                onSelectedIndexChange = onIslandHideBehaviorChange,
+            )
+            SwitchPreference(
+                title = stringResource(R.string.title_status_bar_lyric_hide_lock_screen),
+                checked = hideOnLockScreen,
+                onCheckedChange = onHideOnLockScreenChange,
+            )
     }
-
-    item(key = "status_bar_lyric_visibility") {
-        Card(
-            modifier = Modifier
-                .padding(horizontal = 12.dp)
-                .padding(bottom = 12.dp)
-                .fillMaxWidth()
-        ) {
-            Column {
-                OverlayDropdownPreference(
-                    title = stringResource(R.string.title_status_bar_lyric_clock_hide_behavior),
-                    items = listOf(
-                        stringResource(R.string.option_status_bar_lyric_clock_hide_never),
-                        stringResource(R.string.option_status_bar_lyric_clock_hide_playing),
-                        stringResource(R.string.option_status_bar_lyric_clock_hide_island),
-                    ),
-                    selectedIndex = clockHideBehavior,
-                    onSelectedIndexChange = onClockHideBehaviorChange,
-                )
-                OverlayDropdownPreference(
-                    title = stringResource(R.string.title_status_bar_lyric_island_hide_behavior),
-                    items = listOf(
-                        stringResource(R.string.option_status_bar_lyric_island_hide_none),
-                        stringResource(R.string.option_status_bar_lyric_island_hide_playing),
-                        stringResource(R.string.option_status_bar_lyric_island_hide_always),
-                    ),
-                    selectedIndex = islandHideBehavior,
-                    onSelectedIndexChange = onIslandHideBehaviorChange,
-                )
-                SwitchPreference(
-                    title = stringResource(R.string.title_status_bar_lyric_hide_lock_screen),
-                    checked = hideOnLockScreen,
-                    onCheckedChange = onHideOnLockScreenChange,
-                )
-            }
-        }
     }
 }
 

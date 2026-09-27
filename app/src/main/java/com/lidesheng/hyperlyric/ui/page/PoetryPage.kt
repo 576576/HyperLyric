@@ -7,7 +7,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -47,7 +47,6 @@ import com.lidesheng.hyperlyric.ui.component.SearchBox
 import com.lidesheng.hyperlyric.ui.component.SearchPager
 import com.lidesheng.hyperlyric.ui.component.SearchStatus
 import com.lidesheng.hyperlyric.ui.navigation.LocalNavigator
-import com.lidesheng.hyperlyric.ui.navigation.Route
 import com.lidesheng.hyperlyric.ui.utils.BlurredBar
 import com.lidesheng.hyperlyric.ui.utils.QuotesData
 import com.lidesheng.hyperlyric.ui.utils.pageScrollModifiers
@@ -73,9 +72,6 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @Composable
 fun PoetryPage() {
     val navigator = LocalNavigator.current
-    val openStatusBarLyricSettings = remember(navigator) {
-        { navigator.navigate(Route.StatusBarLyricSettings) }
-    }
     val searchLabel = stringResource(R.string.search)
     var searchStatus by remember { mutableStateOf(SearchStatus(label = searchLabel)) }
 
@@ -151,14 +147,13 @@ fun PoetryPage() {
                                 minWidth = FloatingActionButtonDefaults.MinWidth,
                                 minHeight = FloatingActionButtonDefaults.MinHeight,
                             )
-                            .combinedClickable(
+                            .clickable(
                                 role = Role.Button,
                                 onClick = {
                                     coroutineScope.launch {
                                         listState.animateScrollToItem(0)
                                     }
                                 },
-                                onLongClick = openStatusBarLyricSettings,
                             ),
                         contentAlignment = Alignment.Center,
                     ) {

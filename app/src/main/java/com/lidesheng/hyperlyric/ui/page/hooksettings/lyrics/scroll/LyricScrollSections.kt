@@ -9,14 +9,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.lidesheng.hyperlyric.R
 import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 fun LazyListScope.lyricScrollSections(
-    lyricMode: Int,
     marqueeMode: Boolean,
     onMarqueeModeChange: (Boolean) -> Unit,
     marqueeSpeed: Int,
@@ -43,7 +41,6 @@ fun LazyListScope.lyricScrollSections(
 ) {
     item(key = "lyric_scroll") {
         Column {
-            SmallTitle(text = stringResource(id = R.string.title_marquee))
             Card(
                 modifier = Modifier
                     .padding(horizontal = 12.dp)
@@ -107,7 +104,7 @@ fun LazyListScope.lyricScrollSections(
                     )
                 }
             }
-            if (includeMetadata && lyricMode == 0) {
+            if (includeMetadata) {
                 Card(
                     modifier = Modifier
                         .padding(horizontal = 12.dp)

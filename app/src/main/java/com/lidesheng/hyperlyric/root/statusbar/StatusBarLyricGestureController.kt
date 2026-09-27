@@ -9,8 +9,8 @@ import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
+import com.lidesheng.hyperlyric.common.LyricTypePreference
 import com.lidesheng.hyperlyric.common.RootConstants
-import com.lidesheng.hyperlyric.common.StatusBarLyricPreferences
 import com.lidesheng.hyperlyric.root.HookEntry
 import com.lidesheng.hyperlyric.root.LyriconDataBridge
 import com.lidesheng.hyperlyric.root.island.hooks.IslandPlaybackControllerResolver
@@ -123,11 +123,7 @@ internal class StatusBarLyricGestureController(
 
     private fun readGestureSnapshot(): GestureSnapshot? {
         val prefs = HookEntry.instance?.prefs ?: return null
-        if (!prefs.getBoolean(
-                StatusBarLyricPreferences.KEY_ENABLED,
-                StatusBarLyricPreferences.DEFAULT_ENABLED,
-            )
-        ) return null
+        if (!LyricTypePreference.isEnabled(prefs, RootConstants.LYRIC_TYPE_STATUS_BAR)) return null
         val snapshot = GestureSnapshot(
             doubleTapAction = readAction(
                 prefs.getInt(
