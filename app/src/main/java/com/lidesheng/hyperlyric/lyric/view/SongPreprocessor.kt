@@ -15,26 +15,44 @@ internal class SongPreprocessor(private val placeholder: TitleSlot) {
 
     companion object {
         internal const val MIN_PLACEHOLDER_DURATION_MS = 3_000L
+
+        private val LEADING_MUSIC_INFO_PATTERN = Regex(
+            """^[\s\[\]【】()（）「」『』♪♫♬·•\-]*(?:(?:作词(?:人)?|作詞(?:者)?|作曲(?:者)?|词曲|詞曲|编曲|編曲|制作人|製作人|监制|監製|出品人|录音|錄音|混音|母带|母帶|和声|和聲|演唱|演奏|企划|企劃|统筹|統籌|词|詞|曲|lyricist|composer|arranger|producer)\s*[:：=／/]\s*|(?:lyrics|music|written|composed|arranged|produced)\s+by\b\s*)""",
+            RegexOption.IGNORE_CASE
+        )
     }
 
-    fun prepare(song: Song): List<TimedLine> {
-        val filled = fillGap(song)
+    fun prepare(song: Song): PreparedSongLyrics {
+        val lyrics = timelineLyrics(song)
         val lines = mutableListOf<TimedLine>()
-        var prev: TimedLine? = null
-        filled.lyrics?.forEach { lyric ->
-            val tl = TimedLine(lyric).also {
-                it.previous = prev
-                prev?.next = it
+        var previous: TimedLine? = null
+        lyrics.forEach { lyric ->
+            val timedLine = TimedLine(lyric).also {
+                it.previous = previous
+                previous?.next = it
             }
-            lines.add(tl)
-            prev = tl
+            lines.add(timedLine)
+            previous = timedLine
         }
-        return lines
+
+        val firstSungLyric = song.lyrics.orEmpty().firstOrNull {
+            hasRenderableContent(it) && !isLeadingMusicInfo(it)
+        }
+        val leadingPlaceholder = firstSungLyric
+            ?.takeIf { it.begin >= MIN_PLACEHOLDER_DURATION_MS }
+            ?.let { leadingPlaceholderLine(song, it) }
+            ?.let(::TimedLine)
+
+        return PreparedSongLyrics(
+            lines = lines,
+            leadingPlaceholder = leadingPlaceholder,
+            hasRenderableLyrics = lines.isNotEmpty()
+        )
     }
 
     /**
-     * Builds a persistent placeholder for a metadata-only song. This is separate from
-     * [fillGap], whose empty-song behavior deliberately keeps the legacy end-of-song title line.
+     * Builds a persistent placeholder for a metadata-only song. This is independent of the
+     * timed prelude placeholder and does not make a lyric-less source pass the lyric gate.
      */
     internal fun noLyricsPlaceholder(song: Song): RichLyricLine? = when (placeholder) {
         TitleSlot.NONE -> null
@@ -45,29 +63,33 @@ internal class SongPreprocessor(private val placeholder: TitleSlot) {
         }
     }
 
-    private fun fillGap(song: Song): Song {
-        val lyrics = song.lyrics?.toMutableList() ?: mutableListOf()
-        if (lyrics.isEmpty()) {
-            val title = songTitle(song) ?: return song
-            val d = if (song.duration > 0) song.duration else Long.MAX_VALUE
-            lyrics.add(titleLine(d, d, title))
-        } else {
-            val first = lyrics.first()
-            if (first.begin < MIN_PLACEHOLDER_DURATION_MS) return song
-
-            var end = first.begin
-            if (end > 1) end--
-            val line = when (placeholder) {
-                TitleSlot.NONE -> null
-                TitleSlot.COUNTDOWN -> countdownLine(end)
-                TitleSlot.NAME_ARTIST,
-                TitleSlot.NAME -> songTitle(song)?.let { titleLine(end, end, it) }
-            } ?: return song
-            lyrics.add(0, line)
-        }
-        song.lyrics = lyrics
-        return song
+    private fun timelineLyrics(song: Song): List<RichLyricLine> {
+        return song.lyrics.orEmpty().filter(::hasRenderableContent)
     }
+
+    private fun leadingPlaceholderLine(song: Song, firstLyric: RichLyricLine): RichLyricLine? {
+        val end = firstLyric.begin
+        return when (placeholder) {
+            TitleSlot.NONE -> null
+            TitleSlot.COUNTDOWN -> countdownLine(end)
+            TitleSlot.NAME_ARTIST,
+            TitleSlot.NAME -> songTitle(song)?.let {
+                titleLine(end, end, it)
+            }
+        }
+    }
+
+    private fun isLeadingMusicInfo(line: RichLyricLine): Boolean {
+        if (line.isTitleLine()) return true
+        val text = line.text?.takeIf { it.isNotBlank() }
+            ?: line.words?.joinToString("") { it.text.orEmpty() }
+                ?.takeIf { it.isNotBlank() }
+            ?: return false
+        return LEADING_MUSIC_INFO_PATTERN.containsMatchIn(text.trim())
+    }
+
+    private fun hasRenderableContent(line: RichLyricLine): Boolean =
+        !line.text.isNullOrBlank() || !line.words.isNullOrEmpty()
 
     private fun titleLine(end: Long, duration: Long, text: String) =
         RichLyricLine(end = end, duration = duration, text = text).apply {
@@ -99,9 +121,13 @@ internal class SongPreprocessor(private val placeholder: TitleSlot) {
     }
 }
 
+internal data class PreparedSongLyrics(
+    val lines: List<TimedLine>,
+    val leadingPlaceholder: TimedLine?,
+    val hasRenderableLyrics: Boolean
+)
+
 internal class TimedLine(val line: IRichLyricLine) : IRichLyricLine by line {
     var previous: TimedLine? = null
     var next: TimedLine? = null
 }
-
-

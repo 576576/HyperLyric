@@ -17,6 +17,7 @@ import com.lidesheng.hyperlyric.lyric.model.lyricMetadataOf
 import com.lidesheng.hyperlyric.lyric.view.METADATA_NEXT_LINE_PREVIEW
 import com.lidesheng.hyperlyric.lyric.view.RichLyricLineView
 import com.lidesheng.hyperlyric.lyric.view.SpaceGateRichLyricLineView
+import com.lidesheng.hyperlyric.lyric.view.isCountdownLine
 import com.lidesheng.hyperlyric.lyric.view.yoyo.YoYoPresets
 import com.lidesheng.hyperlyric.lyric.view.yoyo.animateUpdate
 import com.lidesheng.hyperlyric.root.LyriconDataBridge
@@ -213,6 +214,13 @@ internal object IslandLyricContentAssembler {
         val rawPresentation = processedPresentation(prefs, config)
         val rawLine = rawPresentation.primary
         if (!config.isSplitMode || rawLine == null) return rawPresentation
+        if (rawLine.text.isNullOrEmpty() && rawLine.isCountdownLine()) {
+            return if (isLeft) {
+                LyricPresentation(primary = null)
+            } else {
+                rawPresentation
+            }
+        }
         if (rawLine.text.isNullOrEmpty()) return rawPresentation
 
         val density = view.resources.displayMetrics.density

@@ -173,10 +173,8 @@ internal class CountdownDotsRenderer : LineRenderer {
         } else {
             0f
         }
-        val exitAlpha = 1f - smoothStep(fadeProgress)
         val backgroundBaseAlpha = backgroundPaint.alpha
         val highlightBaseAlpha = highlightPaint.alpha
-        backgroundPaint.alpha = (backgroundBaseAlpha * exitAlpha).toInt()
         var cursorX = alignedStart(
             dotsWidth(radius, gap, lightingProgress),
             model,
@@ -184,10 +182,16 @@ internal class CountdownDotsRenderer : LineRenderer {
         )
 
         repeat(DOT_COUNT) { index ->
+            val dotFadeProgress =
+                (fadeProgress * DOT_COUNT - (DOT_COUNT - 1 - index)).coerceIn(0f, 1f)
+            val dotExitAlpha = 1f - smoothStep(dotFadeProgress)
+            backgroundPaint.alpha = (backgroundBaseAlpha * dotExitAlpha).toInt()
+
             val localProgress = dotProgress(lightingProgress, index)
             val easedProgress = smoothStep(localProgress)
             val currentRadius = radius * (1f + SCALE_AMOUNT * easedProgress)
-            val highlightAlpha = (highlightBaseAlpha * easedProgress * exitAlpha).toInt()
+            val highlightAlpha =
+                (highlightBaseAlpha * easedProgress * dotExitAlpha).toInt()
             val centerX = cursorX + currentRadius
 
             canvas.drawCircle(centerX, centerY, currentRadius, backgroundPaint)

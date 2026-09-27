@@ -288,6 +288,7 @@ object LyriconDataBridge {
         plainTextMarqueeOriginActiveTimeMs
 
     private var timingNavigator: TimingNavigator<TimedLine> = TimingNavigator(emptyArray())
+    private var leadingPlaceholderLine: TimedLine? = null
     private var interludeTracker = InterludeTracker(8_000L)
 
     fun updateSong(
@@ -297,7 +298,7 @@ object LyriconDataBridge {
         HookLogger.d(TAG, "歌曲变更: ${song?.name}")
         isTextMode = false
         plainTextMarqueeOriginActiveTimeMs = 0L
-        fullSongLyricsAvailable = song?.lyrics?.any(::hasRenderableLine) == true
+        fullSongLyricsAvailable = false
         currentLyricMediaMetadata = null
         currentResolvedMediaInfo = null
         currentSong = song
@@ -314,6 +315,7 @@ object LyriconDataBridge {
             rebuildTimeline(song, selectCurrentPosition = false)
         } else {
             timingNavigator = TimingNavigator(emptyArray())
+            leadingPlaceholderLine = null
         }
     }
 
@@ -326,7 +328,6 @@ object LyriconDataBridge {
         val song = currentSong ?: return false
         isTextMode = false
         plainTextMarqueeOriginActiveTimeMs = 0L
-        fullSongLyricsAvailable = song.lyrics?.any(::hasRenderableLine) == true
         currentSongName = song.name
         currentLyric = null
         currentLyricLine = null
@@ -374,6 +375,7 @@ object LyriconDataBridge {
     fun resetLyricContentForMediaChange() {
         isTextMode = false
         plainTextMarqueeOriginActiveTimeMs = 0L
+        leadingPlaceholderLine = null
         fullSongLyricsAvailable = null
         currentLyric = null
         currentLyricLine = null
@@ -408,7 +410,6 @@ object LyriconDataBridge {
         if (enhancedSong.lyrics == expectedBaseSong.lyrics) return false
         currentSong = enhancedSong
         currentSongName = enhancedSong.name
-        fullSongLyricsAvailable = enhancedSong.lyrics?.any(::hasRenderableLine) == true
         rebuildTimeline(enhancedSong, selectCurrentPosition = true)
         return true
     }
@@ -430,14 +431,20 @@ object LyriconDataBridge {
         val lyrics = song.lyrics
         if (lyrics.isNullOrEmpty()) return false
 
-        // 保留当前时刻的全部有效行。Lyricon 的渲染模型允许重叠行，宿主这里只在展示层
-        // 将其裁剪为主行和副行，不能在状态桥接层把它们提前压成一行。
+        // 先展示此刻有效的源歌词行；开唱前只有当前没有源内容时才补前奏占位行。
         val activeLines = buildList {
             timingNavigator.forEachAt(position) { add(it) }
         }
-        val selectedLines = if (activeLines.isNotEmpty()) {
+        val preludePlaceholder = leadingPlaceholderLine?.takeIf {
+            position >= it.begin && position < it.end
+        }
+        val showPreludePlaceholder = activeLines.isEmpty() && preludePlaceholder != null
+        val selectedLines = if (showPreludePlaceholder) {
+            listOf(preludePlaceholder)
+        } else if (activeLines.isNotEmpty()) {
             activeLines
         } else {
+            // Outside a prelude gap, retain the previous line through instrumental sections.
             timingNavigator.findPreviousEntry(position)?.let(::listOf).orEmpty()
         }
 
@@ -446,7 +453,11 @@ object LyriconDataBridge {
         val foundLine = selectedLines.firstOrNull()
         currentLyricLines = selectedLines
         currentLyricLine = foundLine
-        currentNextLyricLine = selectedLines.lastOrNull()?.next
+        currentNextLyricLine = if (!showPreludePlaceholder) {
+            selectedLines.lastOrNull()?.next
+        } else {
+            null
+        }
         // 间奏时保持最后一行歌词，不回退到歌名
         val newText = foundLine?.text ?: currentLyric ?: ""
         // 占位符圆点没有文本，不能只靠文本变化判断是否需要刷新。
@@ -466,6 +477,7 @@ object LyriconDataBridge {
             plainTextMarqueeOriginActiveTimeMs = currentPlaybackClock().activeTimeMs
         }
         isTextMode = true
+        leadingPlaceholderLine = null
         fullSongLyricsAvailable = null
         currentLyric = text
         currentLyricLine = if (!text.isNullOrBlank()) {
@@ -483,6 +495,7 @@ object LyriconDataBridge {
 
     fun updateLyricLine(line: IRichLyricLine) {
         isTextMode = false
+        leadingPlaceholderLine = null
         plainTextMarqueeOriginActiveTimeMs = 0L
         fullSongLyricsAvailable = null
         currentLyricLine = line
@@ -507,6 +520,7 @@ object LyriconDataBridge {
         plainTextMarqueeOriginActiveTimeMs = 0L
         fullSongLyricsAvailable = null
         timingNavigator = TimingNavigator(emptyArray())
+        leadingPlaceholderLine = null
 
         versionCounter.incrementAndGet()
     }
@@ -564,8 +578,10 @@ object LyriconDataBridge {
 
     private fun rebuildTimeline(song: Song, selectCurrentPosition: Boolean) {
         val processor = SongPreprocessor(resolveTitleSlot(placeholderFormat))
-        val lines = processor.prepare(song.deepCopy())
-        timingNavigator = TimingNavigator(lines.toTypedArray())
+        val prepared = processor.prepare(song.deepCopy())
+        timingNavigator = TimingNavigator(prepared.lines.toTypedArray())
+        leadingPlaceholderLine = prepared.leadingPlaceholder
+        fullSongLyricsAvailable = prepared.hasRenderableLyrics
         interludeTracker = InterludeTracker(8_000L)
 
         if (selectCurrentPosition) {
