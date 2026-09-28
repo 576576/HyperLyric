@@ -25,6 +25,12 @@ internal object IslandRenderPolicy {
         val pauseBehavior: Int
     )
 
+    data class Evaluation(
+        val input: Input,
+        val decision: Decision,
+        val reason: String
+    )
+
     enum class Decision {
         TARGET,
         PENDING,
@@ -34,27 +40,40 @@ internal object IslandRenderPolicy {
     }
 
     fun evaluate(input: Input): Decision {
-        if (input.owner == OwnerEvidence.NotMedia) return Decision.NOT_MEDIA
-        if (!input.enabled) return Decision.SUPPRESSED
+        return evaluateDetailed(input).decision
+    }
+
+    fun evaluateDetailed(input: Input): Evaluation {
+        if (input.owner == OwnerEvidence.NotMedia) {
+            return Evaluation(input, Decision.NOT_MEDIA, "not_media")
+        }
+        if (!input.enabled) {
+            return Evaluation(input, Decision.SUPPRESSED, "super_island_disabled")
+        }
         if (!input.hasLyricsForPresentation &&
             (!input.showMusicInfoWhenNoLyrics || !input.hasMusicInfoForPresentation)
         ) {
-            return Decision.SUPPRESSED
+            val reason = if (!input.showMusicInfoWhenNoLyrics) {
+                "has_lyric_false_music_info_fallback_disabled"
+            } else {
+                "has_lyric_false_music_info_unavailable"
+            }
+            return Evaluation(input, Decision.SUPPRESSED, reason)
         }
 
         val mediaOwner = input.owner as? OwnerEvidence.Media
-            ?: return Decision.PENDING
+            ?: return Evaluation(input, Decision.PENDING, "media_owner_pending")
         val lyricPackageName = input.lyricPackageName
             ?.takeIf(String::isNotEmpty)
-            ?: return Decision.PENDING
+            ?: return Evaluation(input, Decision.PENDING, "lyric_package_pending")
 
         if (mediaOwner.packageName != lyricPackageName) {
-            return Decision.OTHER_PACKAGE
+            return Evaluation(input, Decision.OTHER_PACKAGE, "package_mismatch")
         }
         if (!input.playbackActive && input.pauseBehavior == 0) {
-            return Decision.SUPPRESSED
+            return Evaluation(input, Decision.SUPPRESSED, "paused_by_policy")
         }
-        return Decision.TARGET
+        return Evaluation(input, Decision.TARGET, "eligible")
     }
 
     fun isPresentationAllowed(

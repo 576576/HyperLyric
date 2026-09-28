@@ -58,19 +58,22 @@ internal class IslandPresentationDecisionEvaluator(
     }
 
     fun evaluate(owner: IslandRenderPolicy.OwnerEvidence): IslandRenderPolicy.Decision {
-        return IslandRenderPolicy.evaluate(
-            IslandRenderPolicy.Input(
-                owner = owner,
-                lyricPackageName = LyriconDataBridge.currentLyricPackageName,
-                hasLyricsForPresentation = LyriconDataBridge.hasLyricsForPresentation(),
-                hasMusicInfoForPresentation = LyriconDataBridge.hasMusicInfoForPresentation(),
-                showMusicInfoWhenNoLyrics = currentNoLyricsBehavior() ==
-                        RootConstants.ISLAND_NO_LYRICS_BEHAVIOR_MUSIC_INFO,
-                enabled = IslandProbeUtils.isSuperIslandEnabled(),
-                playbackActive = presentationState.isPlaybackActive(),
-                pauseBehavior = currentPauseBehavior()
-            )
+        return evaluateDetailed(owner).decision
+    }
+
+    fun evaluateDetailed(owner: IslandRenderPolicy.OwnerEvidence): IslandRenderPolicy.Evaluation {
+        val input = IslandRenderPolicy.Input(
+            owner = owner,
+            lyricPackageName = LyriconDataBridge.currentLyricPackageName,
+            hasLyricsForPresentation = LyriconDataBridge.hasLyricsForPresentation(),
+            hasMusicInfoForPresentation = LyriconDataBridge.hasMusicInfoForPresentation(),
+            showMusicInfoWhenNoLyrics = currentNoLyricsBehavior() ==
+                    RootConstants.ISLAND_NO_LYRICS_BEHAVIOR_MUSIC_INFO,
+            enabled = IslandProbeUtils.isSuperIslandEnabled(),
+            playbackActive = presentationState.isPlaybackActive(),
+            pauseBehavior = currentPauseBehavior()
         )
+        return IslandRenderPolicy.evaluateDetailed(input)
     }
 
     private fun currentPauseBehavior(): Int {
