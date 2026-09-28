@@ -8,8 +8,8 @@ internal const val METADATA_KEY_ALIGNMENT_RESOLVED = "hyperlyric:alignment-resol
 internal const val METADATA_KEY_AGENT_TYPE = "amll:agent-type"
 
 /**
- * Marks a line that the AMLL TTML parser produced. It is the only writer of this key, so its
- * presence identifies lyrics that came from the AMLL TTML Database rather than the source app.
+ * AMLL TTML 解析器写入的来源标识，用于保留歌词来源信息。
+ * 长间奏倒计时不再依赖此标识，只根据逐字时间轴判断。
  */
 internal const val METADATA_KEY_AMLL_TTML_SOURCE = "amll:ttml"
 

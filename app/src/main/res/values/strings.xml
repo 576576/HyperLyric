@@ -334,6 +334,7 @@
     <string name="option_placeholder_title_artist">歌名 - 歌手</string>
     <string name="option_placeholder_title">歌名</string>
     <string name="option_placeholder_countdown">倒计时圆点</string>
+    <string name="title_lyric_long_interlude_countdown">歌词长间奏显示倒计时圆点</string>
     <string name="title_size">大小</string>
     <string name="label_size_range">范围：8 ~ 16</string>
     <string name="title_font_weight">字重</string>

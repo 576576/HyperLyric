@@ -79,6 +79,14 @@ fun ContentLayoutPage() {
             )
         )
     }
+    var showLongInterludeCountdown by remember(prefs) {
+        mutableStateOf(
+            prefs.getBoolean(
+                RootConstants.KEY_HOOK_LYRIC_LONG_INTERLUDE_COUNTDOWN,
+                RootConstants.DEFAULT_HOOK_LYRIC_LONG_INTERLUDE_COUNTDOWN
+            )
+        )
+    }
     var hideTitleAlias by remember(prefs) {
         mutableStateOf(
             prefs.getBoolean(
@@ -218,6 +226,14 @@ fun ContentLayoutPage() {
             onPlaceholderFormatChange = {
                 placeholderFormat = it
                 PrefsBridge.putInt(RootConstants.KEY_HOOK_PLACEHOLDER_FORMAT, it)
+            },
+            showLongInterludeCountdown = showLongInterludeCountdown,
+            onLongInterludeCountdownChange = {
+                showLongInterludeCountdown = it
+                PrefsBridge.putBoolean(
+                    RootConstants.KEY_HOOK_LYRIC_LONG_INTERLUDE_COUNTDOWN,
+                    it
+                )
             },
             hideTitleAlias = hideTitleAlias,
             onHideTitleAliasChange = {

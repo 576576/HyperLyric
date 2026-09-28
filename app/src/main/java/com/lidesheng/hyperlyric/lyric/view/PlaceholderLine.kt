@@ -6,7 +6,6 @@
 
 package com.lidesheng.hyperlyric.lyric.view
 
-import com.lidesheng.hyperlyric.common.lyric.METADATA_KEY_AMLL_TTML_SOURCE
 import com.lidesheng.hyperlyric.lyric.model.LyricLine
 import com.lidesheng.hyperlyric.lyric.model.RichLyricLine
 import com.lidesheng.hyperlyric.lyric.model.interfaces.IRichLyricLine
@@ -41,7 +40,3 @@ internal fun countdownPlaceholderLine(begin: Long, end: Long): RichLyricLine =
             METADATA_COUNTDOWN_LINE to "true"
         )
     }
-
-/** 当前歌词行是否由 AMLL TTML 解析器产出，即歌词是否来自 AMLL TTML Database。 */
-internal fun IRichLyricLine?.isAmllTtmlLine(): Boolean =
-    this?.metadata?.getBoolean(METADATA_KEY_AMLL_TTML_SOURCE, false) == true

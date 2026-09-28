@@ -213,6 +213,8 @@ object RootConstants {
     const val KEY_HOOK_LYRIC_ALIGNMENT = "key_hook_lyric_alignment"
     const val KEY_HOOK_MUSIC_INFO_ALIGNMENT = "key_hook_music_info_alignment"
     const val KEY_HOOK_PLACEHOLDER_FORMAT = "key_hook_placeholder_format"
+    const val KEY_HOOK_LYRIC_LONG_INTERLUDE_COUNTDOWN =
+        "key_hook_lyric_long_interlude_countdown"
     const val KEY_HOOK_ISLAND_MUSIC_WAVE_STYLE = "key_hook_island_music_wave_style"
 
     // ================= ANIMATION & MARQUEE KEYS =================
@@ -576,6 +578,7 @@ object RootConstants {
     const val PLACEHOLDER_FORMAT_TITLE = 2
     const val PLACEHOLDER_FORMAT_COUNTDOWN = 3
     const val DEFAULT_HOOK_PLACEHOLDER_FORMAT = PLACEHOLDER_FORMAT_COUNTDOWN
+    const val DEFAULT_HOOK_LYRIC_LONG_INTERLUDE_COUNTDOWN = true
     const val ISLAND_MUSIC_WAVE_STYLE_DEFAULT = 0
     const val ISLAND_MUSIC_WAVE_STYLE_COVER_COLOR = 1
     const val ISLAND_MUSIC_WAVE_STYLE_COVER_GRADIENT = 2

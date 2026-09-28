@@ -141,6 +141,10 @@ object LyriconDataBridge {
     @Volatile
     private var placeholderFormat = RootConstants.DEFAULT_HOOK_PLACEHOLDER_FORMAT
 
+    @Volatile
+    private var showLongInterludeCountdown =
+        RootConstants.DEFAULT_HOOK_LYRIC_LONG_INTERLUDE_COUNTDOWN
+
     fun updateLyricPackage(packageName: String?) {
         currentLyricPackageName = packageName
     }
@@ -426,6 +430,17 @@ object LyriconDataBridge {
         return true
     }
 
+    fun updateLongInterludeCountdownEnabled(enabled: Boolean): Boolean {
+        if (showLongInterludeCountdown == enabled) return false
+        showLongInterludeCountdown = enabled
+
+        val song = currentSong?.takeIf {
+            !isTextMode && fullSongLyricsAvailable != null
+        } ?: return true
+        rebuildTimeline(song, selectCurrentPosition = true)
+        return true
+    }
+
     fun updatePosition(position: Long): Boolean {
         currentPosition = position
         if (isTextMode) return false
@@ -561,7 +576,10 @@ object LyriconDataBridge {
      */
     fun noLyricsPlaceholderLine(): IRichLyricLine? {
         val metadata = currentLyricMediaMetadata ?: return null
-        return SongPreprocessor(resolveTitleSlot(placeholderFormat)).noLyricsPlaceholder(
+        return SongPreprocessor(
+            resolveTitleSlot(placeholderFormat),
+            showLongInterludeCountdown
+        ).noLyricsPlaceholder(
             Song(
                 name = metadata.title,
                 artist = metadata.artist
@@ -585,7 +603,10 @@ object LyriconDataBridge {
     }
 
     private fun rebuildTimeline(song: Song, selectCurrentPosition: Boolean) {
-        val processor = SongPreprocessor(resolveTitleSlot(placeholderFormat))
+        val processor = SongPreprocessor(
+            resolveTitleSlot(placeholderFormat),
+            showLongInterludeCountdown
+        )
         val prepared = processor.prepare(song.deepCopy())
         timingNavigator = TimingNavigator(prepared.lines.toTypedArray())
         interludeCountdownNavigator =

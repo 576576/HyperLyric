@@ -539,6 +539,13 @@ class HookEntry : XposedModule() {
             cleanupRuntime()
             runtimeApp = app
 
+            LyriconDataBridge.updateLongInterludeCountdownEnabled(
+                prefs.getBoolean(
+                    RootConstants.KEY_HOOK_LYRIC_LONG_INTERLUDE_COUNTDOWN,
+                    RootConstants.DEFAULT_HOOK_LYRIC_LONG_INTERLUDE_COUNTDOWN
+                )
+            )
+
             val renderer = SystemUiLyricRenderer
             lyricEnhancementCoordinator = runCatching {
                 LyricEnhancementCoordinator(this, app)
@@ -645,6 +652,27 @@ class HookEntry : XposedModule() {
                                         TAG,
                                         "配置未生效: key=$key, value=$format, reason=value_unchanged_or_no_active_lyric"
                                     )
+                                }
+                            }
+                        }
+
+                        RootConstants.KEY_HOOK_LYRIC_LONG_INTERLUDE_COUNTDOWN -> {
+                            val enabled = prefs.getBoolean(
+                                key,
+                                RootConstants.DEFAULT_HOOK_LYRIC_LONG_INTERLUDE_COUNTDOWN
+                            )
+                            Handler(Looper.getMainLooper()).post {
+                                val changed =
+                                    LyriconDataBridge.updateLongInterludeCountdownEnabled(enabled)
+                                if (changed) {
+                                    SystemUiLyricRenderer.updateLyricLine()
+                                    val playbackClock = LyriconDataBridge.currentPlaybackClock()
+                                    SystemUiLyricRenderer.updatePosition(
+                                        playbackClock.positionMs,
+                                        playbackClock.playbackSpeed
+                                    )
+                                } else {
+                                    HookLogger.d(TAG, "长间奏倒计时设置未变化")
                                 }
                             }
                         }

@@ -11,7 +11,10 @@ import com.lidesheng.hyperlyric.lyric.model.Song
 import com.lidesheng.hyperlyric.lyric.model.interfaces.IRichLyricLine
 import com.lidesheng.hyperlyric.lyric.model.lyricMetadataOf
 
-internal class SongPreprocessor(private val placeholder: TitleSlot) {
+internal class SongPreprocessor(
+    private val placeholder: TitleSlot,
+    private val showLongInterludeCountdown: Boolean
+) {
 
     companion object {
         internal const val MIN_PLACEHOLDER_DURATION_MS = 3_000L
@@ -58,27 +61,47 @@ internal class SongPreprocessor(private val placeholder: TitleSlot) {
     }
 
     /**
-     * 为 AMLL TTML 歌词中的长间奏合成倒计时占位行。
+     * 为有精确逐字时间轴的歌词中的长间奏合成倒计时占位行。
      *
-     * 相邻两行都来自 AMLL TTML Database、且后一行开始时间与前一行结束时间之差不小于
+     * 相邻两行均有合法逐字时间轴，且后一行开始时间与前一行结束时间之差不小于
      * [MIN_INTERLUDE_GAP_MS] 时，在前一行结束后 [INTERLUDE_COUNTDOWN_DELAY_MS] 处生成一行，
-     * 覆盖到后一行开始为止。占位符格式不是倒计时圆点时返回空列表，间奏保持既有表现。
+     * 覆盖到后一行开始为止。是否显示由独立开关控制，与前奏/无歌词占位符格式无关。
      *
      * 合成行不进入主时间轴，宿主单独维护其检索，因此不影响真实歌词行的检索与可用性判定。
      */
     private fun interludeCountdowns(lines: List<TimedLine>): List<TimedLine> {
-        if (placeholder != TitleSlot.COUNTDOWN) return emptyList()
+        if (!showLongInterludeCountdown) return emptyList()
         val countdowns = mutableListOf<TimedLine>()
         for (index in 0 until lines.size - 1) {
             val current = lines[index]
             val next = lines[index + 1]
-            if (!current.isAmllTtmlLine() || !next.isAmllTtmlLine()) continue
+            if (!hasPreciseWordTiming(current) || !hasPreciseWordTiming(next)) continue
             if (next.begin - current.end < MIN_INTERLUDE_GAP_MS) continue
+            if (current.end > Long.MAX_VALUE - INTERLUDE_COUNTDOWN_DELAY_MS) continue
             val begin = current.end + INTERLUDE_COUNTDOWN_DELAY_MS
             if (begin >= next.begin) continue
             countdowns.add(TimedLine(countdownPlaceholderLine(begin, next.begin)))
         }
         return countdowns
+    }
+
+    private fun hasPreciseWordTiming(line: TimedLine): Boolean {
+        val words = line.words ?: return false
+        if (line.begin < 0L || line.end <= line.begin) return false
+        if (words.none { !it.text.isNullOrBlank() }) return false
+
+        var previousEnd = line.begin
+        for (word in words) {
+            if (word.begin < line.begin ||
+                word.end <= word.begin ||
+                word.end > line.end ||
+                word.begin < previousEnd
+            ) {
+                return false
+            }
+            previousEnd = word.end
+        }
+        return true
     }
 
     /**
@@ -147,7 +170,7 @@ internal class SongPreprocessor(private val placeholder: TitleSlot) {
 internal data class PreparedSongLyrics(
     val lines: List<TimedLine>,
     val leadingPlaceholder: TimedLine?,
-    /** AMLL TTML 长间奏的倒计时占位行，独立于 [lines]，不参与真实歌词行检索 */
+    /** 长间奏的倒计时占位行，独立于 [lines]，不参与真实歌词行检索 */
     val interludeCountdowns: List<TimedLine>,
     val hasRenderableLyrics: Boolean
 )
