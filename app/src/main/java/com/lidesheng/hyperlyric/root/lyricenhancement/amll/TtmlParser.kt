@@ -3,6 +3,7 @@ package com.lidesheng.hyperlyric.root.lyricenhancement.amll
 import android.util.Xml
 import com.lidesheng.hyperlyric.common.lyric.METADATA_KEY_ALIGNMENT_RESOLVED
 import com.lidesheng.hyperlyric.common.lyric.METADATA_KEY_AGENT_TYPE
+import com.lidesheng.hyperlyric.common.lyric.METADATA_KEY_AMLL_TTML_SOURCE
 import com.lidesheng.hyperlyric.lyric.model.LyricMetadata
 import com.lidesheng.hyperlyric.lyric.model.LyricWord
 import com.lidesheng.hyperlyric.lyric.model.RichLyricLine
@@ -38,8 +39,9 @@ import java.util.Locale
  * - 输出为 RichLyricLine/LyricWord 模型，duration 显式计算；
  * - 歌词写回要求行/词时间轴严格合法，解析后执行防御性规整
  *   （行 end 扩展覆盖 bg 词、词 clamp、排序、规模限制），见 [regularizeLines]；
- * - 间奏倒计时行（无 text/words）被宿主校验拒绝，v1 不插入（spec §7.2，
- *   宿主放行 CountdownLine metadata 行后可恢复）。
+ * - 间奏倒计时行（无 text/words）会被宿主校验拒绝，解析器不插入；长间奏的倒计时
+ *   由宿主渲染层按行间隔合成，见 SongPreprocessor；
+ * - 每行写入 amll:ttml 来源标记，宿主据此判定歌词是否来自 AMLL TTML Database。
  */
 internal class TtmlParser {
 
@@ -60,14 +62,6 @@ internal class TtmlParser {
 
         const val METADATA_KEY_AGENT = "amll:agent"
         private const val DEFAULT_AGENT_ID = "v1"
-
-        /** 间奏提示的最小行间隔（main 分支常量，v1 未使用，见类注释） */
-        @Suppress("unused")
-        private const val INTERLUDE_MIN_GAP_MS = 4_000L
-
-        /** 间奏倒计时的显示延迟（main 分支常量，v1 未使用，见类注释） */
-        @Suppress("unused")
-        private const val INTERLUDE_COUNTDOWN_DELAY_MS = 1_000L
 
         /** 宿主校验的规模限制 */
         private const val MAX_LINES = 20_000
@@ -577,7 +571,9 @@ internal class TtmlParser {
         val begin = paragraph.begin.coerceAtLeast(0L)
         val end = if (paragraph.end >= paragraph.begin && paragraph.end >= 0) paragraph.end else begin
         val metadataValues = mutableMapOf<String, String?>(
-            METADATA_KEY_ALIGNMENT_RESOLVED to "true"
+            METADATA_KEY_ALIGNMENT_RESOLVED to "true",
+            // 来源标记：宿主据此判定当前歌词由 AMLL TTML Database 提供
+            METADATA_KEY_AMLL_TTML_SOURCE to "true"
         )
         paragraph.agent?.let { agent ->
             metadataValues[METADATA_KEY_AGENT] = agent

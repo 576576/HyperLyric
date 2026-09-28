@@ -288,6 +288,7 @@ object LyriconDataBridge {
         plainTextMarqueeOriginActiveTimeMs
 
     private var timingNavigator: TimingNavigator<TimedLine> = TimingNavigator(emptyArray())
+    private var interludeCountdownNavigator: TimingNavigator<TimedLine> = TimingNavigator(emptyArray())
     private var leadingPlaceholderLine: TimedLine? = null
     private var interludeTracker = InterludeTracker(8_000L)
 
@@ -315,6 +316,7 @@ object LyriconDataBridge {
             rebuildTimeline(song, selectCurrentPosition = false)
         } else {
             timingNavigator = TimingNavigator(emptyArray())
+            interludeCountdownNavigator = TimingNavigator(emptyArray())
             leadingPlaceholderLine = null
         }
     }
@@ -439,13 +441,18 @@ object LyriconDataBridge {
             position >= it.begin && position < it.end
         }
         val showPreludePlaceholder = activeLines.isEmpty() && preludePlaceholder != null
-        val selectedLines = if (showPreludePlaceholder) {
-            listOf(preludePlaceholder)
-        } else if (activeLines.isNotEmpty()) {
-            activeLines
+        // 长间奏窗口内显示倒计时占位行；延迟窗口与短间奏仍保持最后一行歌词。
+        val interludeCountdown = if (activeLines.isEmpty() && !showPreludePlaceholder) {
+            interludeCountdownNavigator.first(position)
         } else {
+            null
+        }
+        val selectedLines = when {
+            showPreludePlaceholder -> listOf(preludePlaceholder)
+            interludeCountdown != null -> listOf(interludeCountdown)
+            activeLines.isNotEmpty() -> activeLines
             // Outside a prelude gap, retain the previous line through instrumental sections.
-            timingNavigator.findPreviousEntry(position)?.let(::listOf).orEmpty()
+            else -> timingNavigator.findPreviousEntry(position)?.let(::listOf).orEmpty()
         }
 
         val previousLines = currentLyricLines
@@ -520,6 +527,7 @@ object LyriconDataBridge {
         plainTextMarqueeOriginActiveTimeMs = 0L
         fullSongLyricsAvailable = null
         timingNavigator = TimingNavigator(emptyArray())
+        interludeCountdownNavigator = TimingNavigator(emptyArray())
         leadingPlaceholderLine = null
 
         versionCounter.incrementAndGet()
@@ -580,7 +588,15 @@ object LyriconDataBridge {
         val processor = SongPreprocessor(resolveTitleSlot(placeholderFormat))
         val prepared = processor.prepare(song.deepCopy())
         timingNavigator = TimingNavigator(prepared.lines.toTypedArray())
+        interludeCountdownNavigator =
+            TimingNavigator(prepared.interludeCountdowns.toTypedArray())
         leadingPlaceholderLine = prepared.leadingPlaceholder
+        if (prepared.interludeCountdowns.isNotEmpty()) {
+            HookLogger.d(
+                TAG,
+                "间奏倒计时占位行: song=${song.name}, count=${prepared.interludeCountdowns.size}"
+            )
+        }
         fullSongLyricsAvailable = prepared.hasRenderableLyrics
         interludeTracker = InterludeTracker(8_000L)
 
