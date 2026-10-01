@@ -152,11 +152,14 @@ fun VerbatimLyricPage() {
             },
             syllableRelative = syllableRelative,
             onSyllableRelativeChange = {
-                updateSyllableSettings(relativeProgress = it, lineDisplayValue = false)
+                updateSyllableSettings(relativeProgress = it)
             },
             syllableHighlight = syllableHighlight,
             onSyllableHighlightChange = {
-                updateSyllableSettings(relativeHighlight = it)
+                updateSyllableSettings(
+                    relativeHighlight = it,
+                    lineDisplayValue = if (it) false else lineDisplay
+                )
             },
             wordMotionEnabled = wordMotionEnabled,
             onWordMotionEnabledChange = {

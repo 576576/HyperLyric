@@ -28,19 +28,11 @@ object SyllablePreferencePolicy {
         relativeProgress: Boolean,
         relativeHighlight: Boolean,
         lineDisplay: Boolean
-    ): SyllablePreferenceState = if (lineDisplay) {
-        SyllablePreferenceState(
-            relativeProgress = false,
-            relativeHighlight = relativeHighlight,
-            lineDisplay = true
-        )
-    } else {
-        SyllablePreferenceState(
-            relativeProgress = relativeProgress,
-            relativeHighlight = relativeHighlight,
-            lineDisplay = false
-        )
-    }
+    ): SyllablePreferenceState = SyllablePreferenceState(
+        relativeProgress = relativeProgress,
+        relativeHighlight = relativeHighlight && !lineDisplay,
+        lineDisplay = lineDisplay
+    )
 
     fun write(editor: SharedPreferences.Editor, state: SyllablePreferenceState) {
         editor.putBoolean(RootConstants.KEY_HOOK_SYLLABLE_LINE_DISPLAY, state.lineDisplay)
