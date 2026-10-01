@@ -23,6 +23,8 @@ internal object StatusBarLyricRenderer {
     private val preferenceRefresh = Runnable { renderLyricLine(force = true) }
     private var clockTemporarilyRevealed = false
     private var lyricTemporarilyHidden = false
+    private val playbackStateLock = Any()
+    private var lastPlaybackStateIsPlaying = false
     private val restoreClockHideRunnable = Runnable {
         clockTemporarilyRevealed = false
         refreshClockVisibility(HookEntry.instance?.prefs)
@@ -212,6 +214,13 @@ internal object StatusBarLyricRenderer {
     }
 
     fun onPlaybackStateChanged(isPlaying: Boolean) {
+        val resumed = synchronized(playbackStateLock) {
+            val wasPlaying = lastPlaybackStateIsPlaying
+            lastPlaybackStateIsPlaying = isPlaying
+            isPlaying && !wasPlaying
+        }
+        if (resumed) resetTemporaryLyricHide()
+
         val prefs = HookEntry.instance?.prefs
         refreshClockVisibility(prefs)
         refreshIslandSuppressionPolicy(prefs)
@@ -233,6 +242,8 @@ internal object StatusBarLyricRenderer {
     }
 
     fun clearAllViews() {
+        resetPlaybackState()
+        resetTemporaryLyricHide()
         renderingEnabled = false
         refreshIslandSuppressionPolicy(HookEntry.instance?.prefs)
         StatusBarLyricIslandRegionDispatcher.updateLyricsVisible(false)
@@ -435,8 +446,22 @@ internal object StatusBarLyricRenderer {
         mainHandler.removeCallbacks(restoreTemporaryLyricHideRunnable)
         clockTemporarilyRevealed = false
         lyricTemporarilyHidden = false
+        resetPlaybackState()
         StatusBarLyricHostRegistry.liveHosts().forEach { host ->
             host.setLyricTemporarilyHidden(false)
+        }
+    }
+
+    private fun resetTemporaryLyricHide() {
+        runOnMain {
+            mainHandler.removeCallbacks(restoreTemporaryLyricHideRunnable)
+            lyricTemporarilyHidden = false
+        }
+    }
+
+    private fun resetPlaybackState() {
+        synchronized(playbackStateLock) {
+            lastPlaybackStateIsPlaying = false
         }
     }
 

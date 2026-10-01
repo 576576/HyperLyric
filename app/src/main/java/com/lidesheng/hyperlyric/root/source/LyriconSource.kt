@@ -122,16 +122,31 @@ class LyriconSource : LyricSource {
         }
 
         override fun onDisconnected(subscriber: LyriconSubscriber) {
+            if (this@LyriconSource.subscriber !== subscriber) return
             HookLogger.w(TAG, "订阅连接已断开")
+            clearActivePlayerState()
         }
 
         override fun onConnectTimeout(subscriber: LyriconSubscriber) {
+            if (this@LyriconSource.subscriber !== subscriber) return
             HookLogger.w(TAG, "订阅连接超时")
+            clearActivePlayerState()
         }
     }
 
     private val activePlayerListener = object : ActivePlayerListener {
         override fun onActiveProviderChanged(providerInfo: ProviderInfo?) {
+            val playerPackage = providerInfo?.playerPackageName ?: "none"
+            val providerPackage = providerInfo?.providerPackageName ?: "none"
+            val processName = providerInfo?.processName ?: "none"
+            HookLogger.dState(
+                stateId = "LyriconSource.activePlayer",
+                tag = TAG,
+                state = "$providerPackage|$playerPackage|$processName"
+            ) {
+                "活跃播放器变更: provider=$providerPackage, player=$playerPackage, " +
+                        "process=$processName"
+            }
             sink?.onStop()
             activeProviderPackageName = providerInfo?.providerPackageName
             activePlayerPackageName = providerInfo?.playerPackageName
@@ -192,5 +207,12 @@ class LyriconSource : LyricSource {
         override fun onDisplayTranslationChanged(isDisplayTranslation: Boolean) = Unit
 
         override fun onDisplayRomaChanged(isDisplayRoma: Boolean) = Unit
+    }
+
+    private fun clearActivePlayerState() {
+        activeProviderPackageName = null
+        activePlayerPackageName = null
+        activeProviderDelayMs = RootConstants.DEFAULT_HOOK_LYRICON_PROVIDER_DELAY
+        sink?.onStop()
     }
 }

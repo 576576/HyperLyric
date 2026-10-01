@@ -171,8 +171,8 @@ internal class RootLyricSink(
         currentPlaybackSpeed = 1f
         lyricEnhancementController.onStop()
         endColorBinding()
-        renderer.clearAllViews()
         LyriconDataBridge.clearState()
+        renderer.clearAllViews()
     }
 
     override fun onMetadata(metadata: LyricMediaMetadata?) {
