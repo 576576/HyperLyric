@@ -142,7 +142,6 @@
     <string name="option_status_bar_lyric_gesture_none">No action</string>
     <string name="option_status_bar_lyric_gesture_toggle_playback">Play/Pause</string>
     <string name="option_status_bar_lyric_gesture_temporary_clock">Show clock temporarily</string>
-    <string name="option_status_bar_lyric_gesture_swipe_none">None</string>
     <string name="option_status_bar_lyric_gesture_previous_track">Previous track</string>
     <string name="option_status_bar_lyric_gesture_next_track">Next track</string>
     <string name="lyric_source_lyricon">Lyricon</string>

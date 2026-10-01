@@ -203,7 +203,7 @@ fun StatusBarLyricSettingsPage() {
         RootConstants.STATUS_BAR_LYRIC_GESTURE_SWIPE_NEXT,
     )
     val swipeActionItems = listOf(
-        stringResource(R.string.option_status_bar_lyric_gesture_swipe_none),
+        stringResource(R.string.option_status_bar_lyric_gesture_none),
         stringResource(R.string.option_status_bar_lyric_gesture_previous_track),
         stringResource(R.string.option_status_bar_lyric_gesture_next_track),
     )
