@@ -21,7 +21,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import com.lidesheng.hyperlyric.R
@@ -137,7 +139,10 @@ fun NumberInputDialog(
     onConfirm: (Int) -> Unit
 ) {
     if (!show) return
-    var inputValue by remember { mutableStateOf(initialValue.toString()) }
+    var inputValue by remember {
+        val text = initialValue.toString()
+        mutableStateOf(TextFieldValue(text, selection = TextRange(text.length)))
+    }
 
     WindowDialog(
         title = title,
@@ -150,7 +155,7 @@ fun NumberInputDialog(
             TextField(
                 value = inputValue,
                 onValueChange = { newValue ->
-                    if (newValue.all { it.isDigit() }) inputValue = newValue
+                    if (newValue.text.all { it.isDigit() }) inputValue = newValue
                 },
                 label = label,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -172,7 +177,7 @@ fun NumberInputDialog(
                 TextButton(
                     text = stringResource(id = R.string.confirm),
                     onClick = {
-                        inputValue.toIntOrNull()?.let {
+                        inputValue.text.toIntOrNull()?.let {
                             onConfirm(it.coerceIn(min, max))
                             onDismiss()
                         }
@@ -198,7 +203,11 @@ fun TextInputDialog(
     onConfirm: (String) -> Unit
 ) {
     if (!show) return
-    var inputValue by remember { mutableStateOf(initialValue) }
+    var inputValue by remember {
+        mutableStateOf(
+            TextFieldValue(initialValue, selection = TextRange(initialValue.length))
+        )
+    }
 
     WindowDialog(
         title = title,
@@ -230,7 +239,7 @@ fun TextInputDialog(
                 Spacer(Modifier.width(20.dp))
                 TextButton(
                     text = confirmText,
-                    onClick = { onConfirm(inputValue); onDismiss() },
+                    onClick = { onConfirm(inputValue.text); onDismiss() },
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.textButtonColorsPrimary()
                 )
@@ -286,7 +295,10 @@ fun FloatInputDialog(
     onConfirm: (Float) -> Unit
 ) {
     if (!show) return
-    var inputValue by remember { mutableStateOf(initialValue.toString()) }
+    var inputValue by remember {
+        val text = initialValue.toString()
+        mutableStateOf(TextFieldValue(text, selection = TextRange(text.length)))
+    }
 
     WindowDialog(
         title = title,
@@ -299,7 +311,7 @@ fun FloatInputDialog(
             TextField(
                 value = inputValue,
                 onValueChange = { newValue ->
-                    if (newValue.isValidDecimalInput()) inputValue = newValue
+                    if (newValue.text.isValidDecimalInput()) inputValue = newValue
                 },
                 label = label,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -321,7 +333,7 @@ fun FloatInputDialog(
                 TextButton(
                     text = stringResource(id = R.string.confirm),
                     onClick = {
-                        inputValue.toFloatOrNull()?.let {
+                        inputValue.text.toFloatOrNull()?.let {
                             onConfirm(it.coerceIn(min, max))
                             onDismiss()
                         }
