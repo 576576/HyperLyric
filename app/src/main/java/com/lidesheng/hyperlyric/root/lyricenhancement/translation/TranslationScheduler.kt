@@ -18,7 +18,7 @@ internal class TranslationScheduler {
         const val MAX_RUNNING = 3
         const val MAX_PENDING = 5
         // Leave a small margin below the outer enhancement processor deadline.
-        const val MAX_PROCESS_WAIT_MS = 35_000L
+        const val MAX_PROCESS_WAIT_MS = 60_000L
     }
 
     private val executor: ExecutorService = Executors.newFixedThreadPool(MAX_RUNNING) { runnable ->

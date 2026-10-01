@@ -16,8 +16,8 @@ internal class OpenAiTranslationClient {
     private companion object {
         const val LOG_TAG = "LyricEnhancement/AiTranslation/OpenAiClient"
         const val CONNECT_TIMEOUT_MS = 8_000
-        // Keep the network read just below the 35-second AI scheduler deadline.
-        const val READ_TIMEOUT_MS = 34_000
+        // Leave the total request deadline to the scheduler's 60-second wait.
+        const val READ_TIMEOUT_MS = 65_000
     }
 
     private val parser = TranslationResponseParser()

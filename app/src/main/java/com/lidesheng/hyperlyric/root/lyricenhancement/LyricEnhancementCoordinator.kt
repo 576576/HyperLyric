@@ -317,6 +317,6 @@ internal class LyricEnhancementCoordinator(
 
     private companion object {
         const val LOG_TAG = "LyricEnhancement"
-        const val MAX_FEATURE_TIMEOUT_MS = 40_000L
+        const val MAX_FEATURE_TIMEOUT_MS = 70_000L
     }
 }
