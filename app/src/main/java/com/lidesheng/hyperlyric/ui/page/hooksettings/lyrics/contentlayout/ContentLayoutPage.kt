@@ -87,6 +87,14 @@ fun ContentLayoutPage() {
             )
         )
     }
+    var lyricPreviewEnabled by remember(prefs) {
+        mutableStateOf(
+            prefs.getBoolean(
+                RootConstants.KEY_HOOK_LYRIC_PREVIEW,
+                RootConstants.DEFAULT_HOOK_LYRIC_PREVIEW
+            )
+        )
+    }
     var hideTitleAlias by remember(prefs) {
         mutableStateOf(
             prefs.getBoolean(
@@ -226,6 +234,11 @@ fun ContentLayoutPage() {
             onPlaceholderFormatChange = {
                 placeholderFormat = it
                 PrefsBridge.putInt(RootConstants.KEY_HOOK_PLACEHOLDER_FORMAT, it)
+            },
+            lyricPreviewEnabled = lyricPreviewEnabled,
+            onLyricPreviewEnabledChange = {
+                lyricPreviewEnabled = it
+                PrefsBridge.putBoolean(RootConstants.KEY_HOOK_LYRIC_PREVIEW, it)
             },
             showLongInterludeCountdown = showLongInterludeCountdown,
             onLongInterludeCountdownChange = {

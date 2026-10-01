@@ -150,6 +150,8 @@ internal fun LazyListScope.contentLayoutSections(
     onLyricAlignmentChange: (ContentLayoutAlignment) -> Unit,
     placeholderFormat: Int,
     onPlaceholderFormatChange: (Int) -> Unit,
+    lyricPreviewEnabled: Boolean,
+    onLyricPreviewEnabledChange: (Boolean) -> Unit,
     showLongInterludeCountdown: Boolean,
     onLongInterludeCountdownChange: (Boolean) -> Unit,
     hideTitleAlias: Boolean,
@@ -256,6 +258,12 @@ internal fun LazyListScope.contentLayoutSections(
                         RootConstants.PLACEHOLDER_FORMAT_COUNTDOWN
                     ),
                     onSelectedIndexChange = onPlaceholderFormatChange
+                )
+                SwitchPreference(
+                    title = stringResource(id = R.string.title_lyric_preview),
+                    summary = stringResource(id = R.string.summary_lyric_preview),
+                    checked = lyricPreviewEnabled,
+                    onCheckedChange = onLyricPreviewEnabledChange
                 )
                 SwitchPreference(
                     title = stringResource(id = R.string.title_lyric_long_interlude_countdown),

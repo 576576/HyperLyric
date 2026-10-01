@@ -13,7 +13,8 @@ import com.lidesheng.hyperlyric.lyric.model.lyricMetadataOf
 
 internal class SongPreprocessor(
     private val placeholder: TitleSlot,
-    private val showLongInterludeCountdown: Boolean
+    private val showLongInterludeCountdown: Boolean,
+    private val showLyricPreview: Boolean = false
 ) {
 
     companion object {
@@ -64,8 +65,8 @@ internal class SongPreprocessor(
      * 为有精确逐字时间轴的歌词中的长间奏合成倒计时占位行。
      *
      * 相邻两行均有合法逐字时间轴，且后一行开始时间与前一行结束时间之差不小于
-     * [MIN_INTERLUDE_GAP_MS] 时，在前一行结束后 [INTERLUDE_COUNTDOWN_DELAY_MS] 处生成一行，
-     * 覆盖到后一行开始为止。是否显示由独立开关控制，与前奏/无歌词占位符格式无关。
+     * [MIN_INTERLUDE_GAP_MS] 时生成覆盖到后一行开始的倒计时行。启用歌词预览时从前一行结束
+     * 处开始；否则保留原有的 [INTERLUDE_COUNTDOWN_DELAY_MS] 延迟。是否显示由独立开关控制。
      *
      * 合成行不进入主时间轴，宿主单独维护其检索，因此不影响真实歌词行的检索与可用性判定。
      */
@@ -77,8 +78,14 @@ internal class SongPreprocessor(
             val next = lines[index + 1]
             if (!hasPreciseWordTiming(current) || !hasPreciseWordTiming(next)) continue
             if (next.begin - current.end < MIN_INTERLUDE_GAP_MS) continue
-            if (current.end > Long.MAX_VALUE - INTERLUDE_COUNTDOWN_DELAY_MS) continue
-            val begin = current.end + INTERLUDE_COUNTDOWN_DELAY_MS
+            if (!showLyricPreview && current.end > Long.MAX_VALUE - INTERLUDE_COUNTDOWN_DELAY_MS) {
+                continue
+            }
+            val begin = if (showLyricPreview) {
+                current.end
+            } else {
+                current.end + INTERLUDE_COUNTDOWN_DELAY_MS
+            }
             if (begin >= next.begin) continue
             countdowns.add(TimedLine(countdownPlaceholderLine(begin, next.begin)))
         }

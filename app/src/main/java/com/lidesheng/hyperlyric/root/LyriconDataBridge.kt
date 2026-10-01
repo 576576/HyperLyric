@@ -154,6 +154,9 @@ object LyriconDataBridge {
     private var showLongInterludeCountdown =
         RootConstants.DEFAULT_HOOK_LYRIC_LONG_INTERLUDE_COUNTDOWN
 
+    @Volatile
+    private var showLyricPreview = RootConstants.DEFAULT_HOOK_LYRIC_PREVIEW
+
     fun updateLyricPackage(packageName: String?) {
         currentLyricPackageName = packageName
     }
@@ -451,6 +454,17 @@ object LyriconDataBridge {
         return true
     }
 
+    fun updateLyricPreviewEnabled(enabled: Boolean): Boolean {
+        if (showLyricPreview == enabled) return false
+        showLyricPreview = enabled
+
+        val song = currentSong?.takeIf {
+            !isTextMode && fullSongLyricsAvailable != null
+        } ?: return true
+        rebuildTimeline(song, selectCurrentPosition = true)
+        return true
+    }
+
     fun updatePosition(position: Long): Boolean {
         currentPosition = position
         if (isTextMode) return false
@@ -466,9 +480,24 @@ object LyriconDataBridge {
             position >= it.begin && position < it.end
         }
         val showPreludePlaceholder = activeLines.isEmpty() && preludePlaceholder != null
-        // 长间奏窗口内显示倒计时占位行；延迟窗口与短间奏仍保持最后一行歌词。
+        // 倒计时圆点优先于歌词预览；不满足圆点条件时，预览模式可在有效间奏中选择下一行。
         val interludeCountdown = if (activeLines.isEmpty() && !showPreludePlaceholder) {
             interludeCountdownNavigator.first(position)
+        } else {
+            null
+        }
+        val previewLine = if (
+            showLyricPreview && activeLines.isEmpty() &&
+            !showPreludePlaceholder && interludeCountdown == null
+        ) {
+            timingNavigator.findPreviousEntry(position)?.let { previous ->
+                previous.next?.takeIf { next ->
+                    previous.end > previous.begin &&
+                            position >= previous.end &&
+                            next.begin > previous.end &&
+                            position < next.begin
+                }
+            }
         } else {
             null
         }
@@ -476,7 +505,8 @@ object LyriconDataBridge {
             showPreludePlaceholder -> listOf(preludePlaceholder)
             interludeCountdown != null -> listOf(interludeCountdown)
             activeLines.isNotEmpty() -> activeLines
-            // Outside a prelude gap, retain the previous line through instrumental sections.
+            previewLine != null -> listOf(previewLine)
+            // Without a preview candidate, retain the previous line through instrumental sections.
             else -> timingNavigator.findPreviousEntry(position)?.let(::listOf).orEmpty()
         }
 
@@ -589,7 +619,8 @@ object LyriconDataBridge {
         val metadata = currentLyricMediaMetadata ?: return null
         return SongPreprocessor(
             resolveTitleSlot(placeholderFormat),
-            showLongInterludeCountdown
+            showLongInterludeCountdown,
+            showLyricPreview
         ).noLyricsPlaceholder(
             Song(
                 name = metadata.title,
@@ -616,7 +647,8 @@ object LyriconDataBridge {
     private fun rebuildTimeline(song: Song, selectCurrentPosition: Boolean) {
         val processor = SongPreprocessor(
             resolveTitleSlot(placeholderFormat),
-            showLongInterludeCountdown
+            showLongInterludeCountdown,
+            showLyricPreview
         )
         val prepared = processor.prepare(song.deepCopy())
         timingNavigator = TimingNavigator(prepared.lines.toTypedArray())

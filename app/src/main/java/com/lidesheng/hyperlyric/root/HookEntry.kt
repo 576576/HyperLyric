@@ -545,6 +545,12 @@ class HookEntry : XposedModule() {
                     RootConstants.DEFAULT_HOOK_LYRIC_LONG_INTERLUDE_COUNTDOWN
                 )
             )
+            LyriconDataBridge.updateLyricPreviewEnabled(
+                prefs.getBoolean(
+                    RootConstants.KEY_HOOK_LYRIC_PREVIEW,
+                    RootConstants.DEFAULT_HOOK_LYRIC_PREVIEW
+                )
+            )
 
             val renderer = SystemUiLyricRenderer
             lyricEnhancementCoordinator = runCatching {
@@ -673,6 +679,27 @@ class HookEntry : XposedModule() {
                                     )
                                 } else {
                                     HookLogger.d(TAG, "长间奏倒计时设置未变化")
+                                }
+                            }
+                        }
+
+                        RootConstants.KEY_HOOK_LYRIC_PREVIEW -> {
+                            val enabled = prefs.getBoolean(
+                                key,
+                                RootConstants.DEFAULT_HOOK_LYRIC_PREVIEW
+                            )
+                            Handler(Looper.getMainLooper()).post {
+                                val changed =
+                                    LyriconDataBridge.updateLyricPreviewEnabled(enabled)
+                                if (changed) {
+                                    SystemUiLyricRenderer.updateLyricLine()
+                                    val playbackClock = LyriconDataBridge.currentPlaybackClock()
+                                    SystemUiLyricRenderer.updatePosition(
+                                        playbackClock.positionMs,
+                                        playbackClock.playbackSpeed
+                                    )
+                                } else {
+                                    HookLogger.d(TAG, "歌词预览设置未变化")
                                 }
                             }
                         }

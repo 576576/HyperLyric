@@ -334,6 +334,8 @@
     <string name="option_placeholder_title_artist">歌名 - 歌手</string>
     <string name="option_placeholder_title">歌名</string>
     <string name="option_placeholder_countdown">倒计时圆点</string>
+    <string name="title_lyric_preview">歌词预览</string>
+    <string name="summary_lyric_preview">拥有结束时间的歌词结束后提前显示下一句歌词</string>
     <string name="title_lyric_long_interlude_countdown">歌词长间奏显示倒计时圆点</string>
     <string name="title_size">大小</string>
     <string name="label_size_range">范围：8 ~ 16</string>
