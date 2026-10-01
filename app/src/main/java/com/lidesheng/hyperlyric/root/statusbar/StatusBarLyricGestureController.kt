@@ -181,6 +181,9 @@ internal class StatusBarLyricGestureController(
             RootConstants.STATUS_BAR_LYRIC_GESTURE_ACTION_TEMPORARY_CLOCK ->
                 StatusBarLyricRenderer.toggleTemporaryClockReveal()
 
+            RootConstants.STATUS_BAR_LYRIC_GESTURE_ACTION_TEMPORARY_HIDE_LYRIC ->
+                StatusBarLyricRenderer.toggleTemporaryLyricHide()
+
             RootConstants.STATUS_BAR_LYRIC_GESTURE_ACTION_OPEN_MEDIA_APP ->
                 performOpenMediaApp()
         }
@@ -357,8 +360,8 @@ internal class StatusBarLyricGestureController(
         val swipeRightAction: Int,
         val hapticFeedbackEnabled: Boolean,
     ) {
-        fun hasAnyBehavior(): Boolean = hapticFeedbackEnabled ||
-                    doubleTapAction != RootConstants.STATUS_BAR_LYRIC_GESTURE_ACTION_NONE ||
+        fun hasAnyBehavior(): Boolean =
+            doubleTapAction != RootConstants.STATUS_BAR_LYRIC_GESTURE_ACTION_NONE ||
                     longPressAction != RootConstants.STATUS_BAR_LYRIC_GESTURE_ACTION_NONE ||
                     swipeLeftAction != RootConstants.STATUS_BAR_LYRIC_GESTURE_SWIPE_NONE ||
                     swipeRightAction != RootConstants.STATUS_BAR_LYRIC_GESTURE_SWIPE_NONE
@@ -372,6 +375,7 @@ internal class StatusBarLyricGestureController(
             RootConstants.STATUS_BAR_LYRIC_GESTURE_ACTION_TOGGLE_PLAYBACK,
             RootConstants.STATUS_BAR_LYRIC_GESTURE_ACTION_TEMPORARY_CLOCK,
             RootConstants.STATUS_BAR_LYRIC_GESTURE_ACTION_OPEN_MEDIA_APP,
+            RootConstants.STATUS_BAR_LYRIC_GESTURE_ACTION_TEMPORARY_HIDE_LYRIC,
         )
         val SWIPE_ACTIONS = setOf(
             RootConstants.STATUS_BAR_LYRIC_GESTURE_SWIPE_NONE,

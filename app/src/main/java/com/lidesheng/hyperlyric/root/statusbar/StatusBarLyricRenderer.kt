@@ -22,9 +22,14 @@ internal object StatusBarLyricRenderer {
     private val renderGeneration = AtomicLong(0L)
     private val preferenceRefresh = Runnable { renderLyricLine(force = true) }
     private var clockTemporarilyRevealed = false
+    private var lyricTemporarilyHidden = false
     private val restoreClockHideRunnable = Runnable {
         clockTemporarilyRevealed = false
         refreshClockVisibility(HookEntry.instance?.prefs)
+    }
+    private val restoreTemporaryLyricHideRunnable = Runnable {
+        lyricTemporarilyHidden = false
+        refreshTemporaryLyricVisibility()
     }
     @Volatile
     private var renderingEnabled = false
@@ -62,6 +67,7 @@ internal object StatusBarLyricRenderer {
             }
             renderingEnabled = true
             StatusBarLyricHostRegistry.liveHosts().forEach { host ->
+                host.setLyricTemporarilyHidden(lyricTemporarilyHidden)
                 host.render(prefs, force = force)
             }
             refreshClockVisibility(prefs)
@@ -145,9 +151,24 @@ internal object StatusBarLyricRenderer {
             mainHandler.removeCallbacks(restoreClockHideRunnable)
             clockTemporarilyRevealed = !clockTemporarilyRevealed
             if (clockTemporarilyRevealed) {
-                mainHandler.postDelayed(restoreClockHideRunnable, TEMPORARY_CLOCK_REVEAL_MS)
+                mainHandler.postDelayed(restoreClockHideRunnable, TEMPORARY_GESTURE_VISIBILITY_MS)
             }
             refreshClockVisibility(HookEntry.instance?.prefs)
+        }
+    }
+
+    /** Toggles a five-second lyric hide; triggering it again restores the lyric immediately. */
+    fun toggleTemporaryLyricHide() {
+        runOnMain {
+            mainHandler.removeCallbacks(restoreTemporaryLyricHideRunnable)
+            lyricTemporarilyHidden = !lyricTemporarilyHidden
+            if (lyricTemporarilyHidden) {
+                mainHandler.postDelayed(
+                    restoreTemporaryLyricHideRunnable,
+                    TEMPORARY_GESTURE_VISIBILITY_MS,
+                )
+            }
+            refreshTemporaryLyricVisibility()
         }
     }
 
@@ -229,7 +250,7 @@ internal object StatusBarLyricRenderer {
         }
         renderGeneration.incrementAndGet()
         renderingEnabled = false
-        clearTemporaryClockReveal()
+        clearTemporaryGestureOverrides()
         StatusBarLyricMediaIslandCoordinator.updateSuppressionPolicy(
             RootConstants.STATUS_BAR_LYRIC_ISLAND_HIDE_NONE,
             null,
@@ -255,7 +276,7 @@ internal object StatusBarLyricRenderer {
         }
         renderGeneration.incrementAndGet()
         renderingEnabled = false
-        clearTemporaryClockReveal()
+        clearTemporaryGestureOverrides()
         StatusBarLyricMediaIslandCoordinator.updateSuppressionPolicy(
             RootConstants.STATUS_BAR_LYRIC_ISLAND_HIDE_NONE,
             null,
@@ -326,7 +347,7 @@ internal object StatusBarLyricRenderer {
             val shouldHide = !clockTemporarilyRevealed && enabled &&
                     LyriconDataBridge.isPlaybackActive() && when (behavior) {
                 RootConstants.STATUS_BAR_LYRIC_CLOCK_HIDE_WHILE_PLAYING ->
-                    LyriconDataBridge.hasLyricsForPresentation()
+                    LyriconDataBridge.hasLyricsForPresentation() && !lyricTemporarilyHidden
 
                 RootConstants.STATUS_BAR_LYRIC_CLOCK_HIDE_WHEN_ISLAND_PRESENT ->
                     StatusBarLyricIslandRegionDispatcher.hasIsland()
@@ -400,10 +421,24 @@ internal object StatusBarLyricRenderer {
         if (Looper.myLooper() == Looper.getMainLooper()) block() else mainHandler.post(block)
     }
 
-    private fun clearTemporaryClockReveal() {
-        mainHandler.removeCallbacks(restoreClockHideRunnable)
-        clockTemporarilyRevealed = false
+    private fun refreshTemporaryLyricVisibility() {
+        val hidden = lyricTemporarilyHidden
+        StatusBarLyricHostRegistry.liveHosts().forEach { host ->
+            host.setLyricTemporarilyHidden(hidden)
+        }
+        publishRenderedLyricState()
+        refreshClockVisibility(HookEntry.instance?.prefs)
     }
 
-    private const val TEMPORARY_CLOCK_REVEAL_MS = 5_000L
+    private fun clearTemporaryGestureOverrides() {
+        mainHandler.removeCallbacks(restoreClockHideRunnable)
+        mainHandler.removeCallbacks(restoreTemporaryLyricHideRunnable)
+        clockTemporarilyRevealed = false
+        lyricTemporarilyHidden = false
+        StatusBarLyricHostRegistry.liveHosts().forEach { host ->
+            host.setLyricTemporarilyHidden(false)
+        }
+    }
+
+    private const val TEMPORARY_GESTURE_VISIBILITY_MS = 5_000L
 }

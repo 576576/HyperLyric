@@ -49,6 +49,7 @@ internal class StatusBarLyricHost(
     private var managedClockReference: WeakReference<View>? = null
     private var managedClockOriginalVisibility: Int? = null
     private var shouldKeepClockHidden = false
+    private var lyricTemporarilyHidden = false
     private var layoutConfig: StatusBarLyricLayoutConfig? = null
     private var autoDuetEnabled = false
     private var latestContentWidthPx = 0f
@@ -89,6 +90,13 @@ internal class StatusBarLyricHost(
         val lyrics = lyricView ?: return false
         return wrapper.visibility == View.VISIBLE &&
                 (isRenderable(lyrics.rawLine) || isRenderable(lyrics.rawSecondaryLine))
+    }
+
+    fun setLyricTemporarilyHidden(hidden: Boolean) {
+        lyricTemporarilyHidden = hidden
+        val wrapper = container ?: return
+        val lyrics = lyricView ?: return
+        updateVisibility(wrapper, lyrics)
     }
 
     fun managesClockVisibility(view: View): Boolean =
@@ -161,7 +169,7 @@ internal class StatusBarLyricHost(
         wrapper.maxWidthPx = effectiveWidthLimitPx
         if (widthLimitChanged) wrapper.requestLayout()
         iconWidthPx = updateIcon(lyrics, layoutConfig, effectiveWidthLimitPx)
-        wrapper.visibility = View.VISIBLE
+        wrapper.visibility = if (lyricTemporarilyHidden) View.GONE else View.VISIBLE
 
         IslandSlotContentFacade.applySlotContent(
             view = lyrics,
@@ -547,8 +555,9 @@ internal class StatusBarLyricHost(
 
     private fun updateVisibility(wrapper: MaxWidthFrameLayout, lyrics: RichLyricLineView) {
         val hasLine = isRenderable(lyrics.rawLine) || isRenderable(lyrics.rawSecondaryLine)
-        wrapper.visibility = if (hasLine) View.VISIBLE else View.GONE
-        iconController?.setHostVisible(hasLine)
+        val shouldShow = hasLine && !lyricTemporarilyHidden
+        wrapper.visibility = if (shouldShow) View.VISIBLE else View.GONE
+        iconController?.setHostVisible(shouldShow)
     }
 
     fun setClockHidden(shouldHide: Boolean) {

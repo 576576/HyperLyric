@@ -190,12 +190,14 @@ fun StatusBarLyricSettingsPage() {
         RootConstants.STATUS_BAR_LYRIC_GESTURE_ACTION_TOGGLE_PLAYBACK,
         RootConstants.STATUS_BAR_LYRIC_GESTURE_ACTION_TEMPORARY_CLOCK,
         RootConstants.STATUS_BAR_LYRIC_GESTURE_ACTION_OPEN_MEDIA_APP,
+        RootConstants.STATUS_BAR_LYRIC_GESTURE_ACTION_TEMPORARY_HIDE_LYRIC,
     )
     val pressActionItems = listOf(
         stringResource(R.string.option_status_bar_lyric_gesture_none),
         stringResource(R.string.option_status_bar_lyric_gesture_toggle_playback),
         stringResource(R.string.option_status_bar_lyric_gesture_temporary_clock),
         stringResource(R.string.option_click_open_media),
+        stringResource(R.string.option_status_bar_lyric_gesture_temporary_hide_lyric),
     )
     val swipeActionValues = listOf(
         RootConstants.STATUS_BAR_LYRIC_GESTURE_SWIPE_NONE,
