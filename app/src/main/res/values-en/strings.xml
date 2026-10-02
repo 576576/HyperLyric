@@ -563,7 +563,7 @@
     <string name="summary_help_prerequisites">① Enable HyperLyric in LSPosed, then turn on \"Xiaomi HyperIsland Lyrics\" in the app\n② Select a lyric source and install and enable its required dependencies\n③ Select the music app in LSPosed\n④ Restart SystemUI, the phone, or the music app as required by the source</string>
     <string name="title_help_lyric_sources">Lyric Sources</string>
     <string name="summary_help_source_lyricon">HyperLyric 6.0 and later requires Lyricon Central and the LyricProvider for your music app. Enable the related modules, then restart SystemUI and the music app. If lyrics are missing, first check source and music-app version compatibility, then check that the required restart was completed.</string>
-    <string name="summary_help_source_superlyric">Install and enable SuperLyric only. Restart the phone after first injection. SuperLyric does not support \"Show Next Lyric Line\". If lyrics are missing, first check that it sent lyrics to the music app and that the versions are compatible.</string>
+    <string name="summary_help_source_superlyric">Install and enable SuperLyric only. Restart the phone after first injection. If lyrics are missing, first check that it sent lyrics to the music app and that the versions are compatible.</string>
     <string name="summary_help_source_lyricinfo">LyricInfo is recommended because mainstream music apps usually do not output lyric metadata. It writes lyrics into system MediaSession metadata; skip it only when the music app provides that metadata itself.</string>
     <string name="tag_download_lyricon">Download Lyricon Central</string>
     <string name="tag_download_providers">Download LyricProvider</string>

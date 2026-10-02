@@ -571,7 +571,7 @@
     <string name="summary_help_prerequisites">① 在 LSPosed 中启用 HyperLyric，并在应用内启用“小米超级岛歌词”开关\n② 选择歌词源，安装并启用对应依赖\n③ 在 LSPosed 中勾选需要使用的音乐软件\n④ 按歌词源要求重启系统界面、手机或音乐软件</string>
     <string name="title_help_lyric_sources">歌词源</string>
     <string name="summary_help_source_lyricon">HyperLyric 6.0 及之后的版本需要同时安装 Lyricon Central 和对应音乐软件的 LyricProvider。启用相关模块后，重启系统界面和音乐软件。如果没有歌词，先检查歌词提供器与音乐软件版本是否兼容，再确认是否完成重启。</string>
-    <string name="summary_help_source_superlyric">只需要安装并启用 SuperLyric。首次注入后重启手机。SuperLyric 不支持“显示下一句歌词”。如果没有歌词，先检查它是否向音乐软件传出了歌词，以及版本是否兼容。</string>
+    <string name="summary_help_source_superlyric">只需要安装并启用 SuperLyric。首次注入后重启手机。如果没有歌词，先检查它是否向音乐软件传出了歌词，以及版本是否兼容。</string>
     <string name="summary_help_source_lyricinfo">建议安装 LyricInfo 模块，将歌词写入系统 MediaSession 元数据；如果音乐软件自身能够输出歌词元数据，则可以不安装。</string>
     <string name="tag_download_lyricon">下载 Lyricon Central</string>
     <string name="tag_download_providers">下载 LyricProvider</string>

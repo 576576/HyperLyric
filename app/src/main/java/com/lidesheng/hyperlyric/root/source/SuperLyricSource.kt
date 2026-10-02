@@ -2,6 +2,7 @@ package com.lidesheng.hyperlyric.root.source
 
 import com.hchen.superlyricapi.ISuperLyricReceiver
 import com.hchen.superlyricapi.SuperLyricData
+import com.hchen.superlyricapi.SuperLyricCache
 import com.hchen.superlyricapi.SuperLyricHelper
 import com.hchen.superlyricapi.SuperLyricLine
 import com.lidesheng.hyperlyric.common.media.MediaMetadataHelper
@@ -46,6 +47,8 @@ class SuperLyricSource : LyricSource {
     private var lastMetadataTitle: String? = null
     private var lastMetadataArtist: String? = null
     private var lastMetadataAlbum: String? = null
+    private var activeLyricId: String? = null
+    private var fullSong: Song? = null
 
     fun initialize(app: android.app.Application) {
         this.app = app
@@ -67,6 +70,9 @@ class SuperLyricSource : LyricSource {
         stopPositionPolling()
         activePublisher = null
         playbackStarted = false
+        activeLyricId = null
+        fullSong = null
+        SuperLyricCache.clear()
 
         // 先检查 SuperLyric 系统服务是否可用
         val available = runCatching { SuperLyricHelper.isAvailable() }
@@ -134,29 +140,48 @@ class SuperLyricSource : LyricSource {
         receiver = null
         activePublisher = null
         playbackStarted = false
+        activeLyricId = null
+        fullSong = null
+        SuperLyricCache.clear()
         sink?.onStop()
         sink = null
         HookLogger.d(TAG, "数据源已停止")
     }
 
-    private fun handleLyric(publisher: String, data: SuperLyricData) {
+    private fun handleLyric(publisher: String, rawData: SuperLyricData) {
         val currentSink = sink ?: return
 
+        // 3.5+ publishes the timeline once and normally sends only an ID/index/position.
+        // Resolve a delta before interpreting it; an older streaming publisher has no ID.
+        val data = if (rawData.isDeltaPayload) {
+            SuperLyricCache.resolve(rawData)?.takeIf { resolved ->
+                !resolved.hasAllLyrics() || resolved.lyricId == rawData.lyricId
+            } ?: rawData
+        } else {
+            rawData.also { if (it.hasAllLyrics()) SuperLyricCache.put(it) }
+        }
+
         // 无实际数据（如拖动进度条时的 BUFFERING 状态），忽略
-        val hasContent = data.hasLyric() || data.hasTitle() || data.hasArtist() || data.hasAlbum()
+        val hasContent = data.hasLyric() || data.hasAllLyrics() ||
+            data.hasTitle() || data.hasArtist() || data.hasAlbum() || data.hasLyricId()
         if (!hasContent) return
 
-        if (activePublisher != publisher) {
+        val newLyricId = data.lyricId?.takeIf { it.isNotBlank() }
+        val publisherChanged = activePublisher != publisher
+        val lyricIdChanged = !publisherChanged && activeLyricId != null &&
+            newLyricId != null && activeLyricId != newLyricId
+        if (publisherChanged || lyricIdChanged) {
             val previousPublisher = activePublisher
             activePublisher = publisher
             stopPositionPolling()
             playbackStarted = false
+            fullSong = null
+            activeLyricId = null
             if (previousPublisher != null) {
-                // SuperLyric does not expose a stable track id. A publisher change is the
-                // source-level boundary that can safely discard the previous stream.
                 currentSink.onStop()
             }
         }
+        if (newLyricId != null) activeLyricId = newLyricId
 
         if (data.hasTitle()) lastMetadataTitle = data.title
         if (data.hasArtist()) lastMetadataArtist = data.artist
@@ -167,27 +192,50 @@ class SuperLyricSource : LyricSource {
             lastMetadataArtist,
             lastMetadataAlbum
         ).joinToString("\u001F")
-        if (lastMetadataKey != metadataKey) {
+        val metadataChanged = lastMetadataKey != metadataKey
+        if (metadataChanged) {
             lastMetadataKey = metadataKey
-            // A metadata identity change is the only track boundary SuperLyric exposes. Clear
-            // the previous line before publishing the new metadata so an instrumental track
-            // cannot keep the previous song's lyric on the other island side.
-            currentSink.onSongChanged(
-                Song(
-                    name = lastMetadataTitle,
-                    artist = lastMetadataArtist,
-                    album = lastMetadataAlbum,
-                    lyrics = emptyList()
-                )
+        }
+        if (fullSong != null && !data.hasAllLyrics() && newLyricId == null &&
+            (data.hasTitle() && lastMetadataTitle != fullSong?.name ||
+                data.hasArtist() && lastMetadataArtist != fullSong?.artist ||
+                data.hasAlbum() && lastMetadataAlbum != fullSong?.album)
+        ) {
+            fullSong = null
+        }
+        val incomingFullSong = if (data.hasAllLyrics() &&
+            (fullSong == null || rawData.hasAllLyrics())
+        ) {
+            Song(
+                // lyricId identifies the lyric payload, not the music platform's song ID.
+                // AMLL's platform probe must not receive it as Song.id.
+                name = lastMetadataTitle,
+                artist = lastMetadataArtist,
+                album = lastMetadataAlbum,
+                duration = data.duration.takeIf { data.hasDuration() } ?: 0L,
+                lyrics = data.allLyrics.orEmpty().mapNotNull { line ->
+                    line?.let { convertToRichLyricLine(it) }
+                }
             )
+        } else null
+        // Do not re-publish a recovered timeline on every progress delta: that would discard
+        // the enhancement result and rebuild the timeline at the publisher's update rate.
+        val publishFull = incomingFullSong != null &&
+            (fullSong == null || (rawData.hasAllLyrics() && incomingFullSong != fullSong))
+        if (publishFull) {
+            fullSong = incomingFullSong
+            currentSink.onSongChanged(incomingFullSong)
+        } else if (metadataChanged && fullSong == null) {
+            currentSink.onSongChanged(
+                Song(name = lastMetadataTitle, artist = lastMetadataArtist,
+                    album = lastMetadataAlbum, lyrics = emptyList())
+            )
+        }
+        if (metadataChanged || publishFull) {
             currentSink.onMetadata(
-                LyricMediaMetadata(
-                    sourceId = id,
-                    packageName = publisher,
-                    title = lastMetadataTitle,
-                    artist = lastMetadataArtist,
-                    album = lastMetadataAlbum
-                )
+                LyricMediaMetadata(sourceId = id, packageName = publisher,
+                    title = lastMetadataTitle, artist = lastMetadataArtist,
+                    album = lastMetadataAlbum)
             )
         }
         // Establish the new stream owner before asking the renderer to resume. A SuperLyric
@@ -199,7 +247,12 @@ class SuperLyricSource : LyricSource {
         }
         startPositionPolling(publisher)
 
-        if (data.hasLyric()) {
+        if (data.hasPosition()) {
+            lastKnownPosition = data.position
+            currentSink.onPositionChanged(data.position, 1f)
+        }
+
+        if (fullSong == null && data.hasLyric()) {
             val lyric = data.lyric
             if (lyric != null) {
                 val st = lyric.startTime
@@ -237,7 +290,10 @@ class SuperLyricSource : LyricSource {
         }
     }
 
-    private fun convertToRichLyricLine(line: SuperLyricLine, data: SuperLyricData): RichLyricLine {
+    private fun convertToRichLyricLine(
+        line: SuperLyricLine,
+        data: SuperLyricData? = null
+    ): RichLyricLine {
         val words = line.words?.map { word ->
             LyricWord(
                 begin = word.startTime,
@@ -246,8 +302,8 @@ class SuperLyricSource : LyricSource {
             )
         }
 
-        val translationText = if (data.hasTranslation()) data.translation?.text else null
-        val translationWords = if (data.hasTranslation()) {
+        val translationText = data?.translation?.text ?: line.translation
+        val translationWords = if (data?.hasTranslation() == true) {
             data.translation?.words?.map { word ->
                 LyricWord(
                     begin = word.startTime,
@@ -260,11 +316,11 @@ class SuperLyricSource : LyricSource {
         // SuperLyric calls this lane "secondary", but the unified model exposes it as
         // romanization. RichLyricLine has no romaWords field, so retain word-only payloads by
         // joining their text rather than leaving the Roma lane empty.
-        val romaText = if (data.hasSecondary()) {
+        val romaText = if (data?.hasSecondary() == true) {
             data.secondary?.text?.takeIf { it.isNotBlank() }
                 ?: data.secondary?.words?.joinToString("") { it.word }
                     ?.takeIf { it.isNotBlank() }
-        } else null
+        } else line.secondary
 
         return RichLyricLine(
             begin = line.startTime,
