@@ -10,6 +10,22 @@ object ChangelogData {
     fun getChangelog(): List<ChangelogItem> {
         return listOf(
             ChangelogItem(
+                version = "7.8-1941",
+                title = "优化了一些体验",
+                summary = "- 新增歌词长间奏显示倒计时圆点\n" +
+                        "- 新增状态栏歌词临时隐藏歌词交互手势选项\n" +
+                        "- 新增歌词预览功能\n" +
+                        "- 修复状态栏歌词在某些情况下可见性问题\n" +
+                        "- 修复多歌手串导致 AMLL 歌词检索全部未命中\n" +
+                        "- 对唱宽度锁定改为整首歌生效\n" +
+                        "- 调整状态栏歌词手势无动作文案\n" +
+                        "- 支持模拟逐行歌词和相对进度歌词同时开启\n" +
+                        "- 优化弹窗输入体验\n" +
+                        "- 延长 AI 翻译超时时长至 60 秒\n" +
+                        "- 适配 superlyric api 3.6\n" +
+                        "- 优化日志输出内容"
+            ),
+            ChangelogItem(
                 version = "7.7-1940",
                 title = "优化了一些体验",
                 summary = "- 新增状态栏歌词\n" +
