@@ -31,16 +31,12 @@ internal object IslandMusicWaveColorHooker {
         Collections.newSetFromMap(WeakHashMap<ClassLoader, Boolean>())
     )
     private val trackedHolders = WeakHashMap<Any, TrackedHolder>()
-    private val nativeColorsByHolder = WeakHashMap<Any, WaveColors>()
 
     @Volatile
     private var module: XposedModule? = null
 
     @Volatile
-    private var colorAccessor: ColorAccessor? = null
-
-    @Volatile
-    private var staticNativeColors: WaveColors? = null
+    private var callbackColors: Array<Int>? = null
 
     @Volatile
     private var latestArtworkHolder: WeakReference<Any>? = null
@@ -60,14 +56,44 @@ internal object IslandMusicWaveColorHooker {
 
         try {
             val holderClass = classLoader.loadClass(ICON_HOLDER_CLASS)
-            colorAccessor = ColorAccessor(
-                topField = holderClass.getDeclaredField("gradientTopColor").apply {
-                    isAccessible = true
-                },
-                bottomField = holderClass.getDeclaredField("gradientBottomColor").apply {
-                    isAccessible = true
-                }
+            val callbackClass = classLoader.loadClass(
+                "$ICON_HOLDER_CLASS\$Companion\$GradientLottieValueCallback"
             )
+            val getValueMethods = callbackClass.declaredMethods.filter {
+                it.name == "getValue" &&
+                        it.parameterCount == 1 &&
+                        it.parameterTypes[0].name.startsWith("com.airbnb.lottie.value.") &&
+                        (it.returnType == arrayOf<Int>().javaClass ||
+                                it.returnType == Any::class.java)
+            }
+            if (getValueMethods.none { it.returnType == arrayOf<Int>().javaClass }) {
+                hookedClassLoaders.remove(classLoader)
+                HookLogger.w(TAG, "音频律动颜色回调不可用: target=GradientLottieValueCallback.getValue")
+                return
+            }
+            // Lottie calls the erased Object-returning bridge through getValueInternal.
+            // Deoptimize that caller and hook both descriptors so an inlined typed call
+            // inside the bridge cannot bypass the override.
+            requireNotNull(callbackClass.superclass).declaredMethods.filter {
+                it.name == "getValueInternal" && it.parameterCount == 7 &&
+                        it.returnType == Any::class.java &&
+                        it.parameterTypes.contentEquals(arrayOf(
+                            Float::class.javaPrimitiveType, Float::class.javaPrimitiveType,
+                            Any::class.java, Any::class.java,
+                            Float::class.javaPrimitiveType, Float::class.javaPrimitiveType,
+                            Float::class.javaPrimitiveType
+                        ))
+            }.forEach(xposedModule::deoptimize)
+            getValueMethods.forEach { method ->
+                method.isAccessible = true
+                xposedModule.managedHook(
+                    executable = method,
+                    capability = if (method.returnType == Any::class.java)
+                        "island.music_wave.gradient_bridge"
+                    else "island.music_wave.gradient_value",
+                    hooker = GradientValueHook(),
+                )
+            }
             val dataField = holderClass.declaredFields.firstOrNull {
                 it.name == "data"
             }?.apply {
@@ -190,14 +216,10 @@ internal object IslandMusicWaveColorHooker {
             synchronized(trackedHolders) {
                 trackedHolders.clear()
             }
-            staticNativeColors = null
             latestArtworkHolder = null
             latestArtworkPalette = null
-            synchronized(nativeColorsByHolder) {
-                nativeColorsByHolder.clear()
-            }
             hookedClassLoaders.clear()
-            colorAccessor = null
+            callbackColors = null
             module = null
         }
     }
@@ -205,27 +227,16 @@ internal object IslandMusicWaveColorHooker {
     private fun applyOptimizedColors(
         colors: WaveColors
     ) {
-        val accessor = colorAccessor ?: return
         if (!hasAllowedTrackedHolder()) {
             if (overrideApplied) restoreNativeColors()
             return
         }
-        if (!overrideApplied) {
-            val snapshotHolder = synchronized(trackedHolders) {
-                trackedHolders.entries
-                    .firstOrNull { isAllowedTarget(it.key, it.value) }
-                    ?.key
-            }
-            try {
-                rememberNativeColors(snapshotHolder, accessor.read(snapshotHolder))
-            } catch (_: Exception) {
-            }
-        }
-        val appliedTargetCount = applyColorsToTrackedHolders(colors)
+        val appliedTargetCount = allowedTrackedHolderCount()
         if (appliedTargetCount == 0) {
             if (overrideApplied) restoreNativeColors()
             return
         }
+        callbackColors = arrayOf(colors.top, colors.bottom)
         overrideApplied = true
         HookLogger.dState(
             stateId = "IslandMusicWaveColorHooker.apply",
@@ -240,8 +251,8 @@ internal object IslandMusicWaveColorHooker {
     }
 
     private fun restoreNativeColors() {
+        callbackColors = null
         if (overrideApplied) {
-            restoreTrackedNativeColors()
             overrideApplied = false
             HookLogger.dState(
                 stateId = "IslandMusicWaveColorHooker.apply",
@@ -299,17 +310,6 @@ internal object IslandMusicWaveColorHooker {
         return true
     }
 
-    private fun rememberNativeColors(holder: Any?, colors: WaveColors) {
-        val accessor = colorAccessor ?: return
-        if (accessor.usesStaticFields) {
-            staticNativeColors = colors
-        } else if (holder != null) {
-            synchronized(nativeColorsByHolder) {
-                nativeColorsByHolder[holder] = colors
-            }
-        }
-    }
-
     private fun applyLatestMediaColors(sharedPrefs: SharedPreferences): Boolean {
         val holder = latestArtworkHolder?.get() ?: return false
         val tracked = synchronized(trackedHolders) { trackedHolders[holder] } ?: return false
@@ -321,20 +321,6 @@ internal object IslandMusicWaveColorHooker {
         val colors = colorsFromPalette(palette.toList(), useGradient) ?: return false
         applyOptimizedColors(colors)
         return true
-    }
-
-    private fun restoreTrackedNativeColors() {
-        val accessor = colorAccessor ?: return
-        if (accessor.usesStaticFields) {
-            staticNativeColors?.let { accessor.write(it) }
-            return
-        }
-        val snapshots = synchronized(nativeColorsByHolder) {
-            nativeColorsByHolder.entries.map { it.key to it.value }
-        }
-        snapshots.forEach { (holder, colors) ->
-            accessor.write(colors, holder)
-        }
     }
 
     private fun trackHolder(holder: Any, data: Any, lottieView: View?) {
@@ -386,22 +372,8 @@ internal object IslandMusicWaveColorHooker {
         )
     }
 
-    private fun applyColorsToTrackedHolders(
-        colors: WaveColors
-    ): Int {
-        val accessor = colorAccessor ?: return 0
-        val holders = synchronized(trackedHolders) {
-            trackedHolders.entries
-                .filter { (holder, tracked) -> isAllowedTarget(holder, tracked) }
-                .map { it.key }
-        }
-        if (holders.isEmpty()) return 0
-        if (accessor.usesStaticFields) {
-            accessor.write(colors)
-            return 1
-        }
-        holders.forEach { holder -> accessor.write(colors, holder) }
-        return holders.size
+    private fun allowedTrackedHolderCount(): Int = synchronized(trackedHolders) {
+        trackedHolders.entries.count { (holder, tracked) -> isAllowedTarget(holder, tracked) }
     }
 
     private fun trackedHolderCount(): Int = synchronized(trackedHolders) {
@@ -443,9 +415,6 @@ internal object IslandMusicWaveColorHooker {
                 }
                 val lottieView = lottieViewField.get(holder) as? View
                 trackHolder(holder, data, lottieView)
-                colorAccessor?.read(holder)?.let {
-                    rememberNativeColors(holder, it)
-                }
                 val bitmap = chain.args.getOrNull(0) as? Bitmap
                 val artworkPalette = runCatching {
                     bitmap?.let(CoverColorHelper::extractPalette)
@@ -520,38 +489,11 @@ internal object IslandMusicWaveColorHooker {
         val bottom: Int
     )
 
-    private data class ColorAccessor(
-        val topField: Field,
-        val bottomField: Field
-    ) {
-        val usesStaticFields: Boolean
-            get() = java.lang.reflect.Modifier.isStatic(topField.modifiers) &&
-                    java.lang.reflect.Modifier.isStatic(bottomField.modifiers)
-
-        fun read(holder: Any? = null): WaveColors = WaveColors(
-            top = getInt(topField, holder),
-            bottom = getInt(bottomField, holder)
-        )
-
-        fun write(colors: WaveColors, holder: Any? = null) {
-            setInt(topField, colors.top, holder)
-            setInt(bottomField, colors.bottom, holder)
-        }
-
-        private fun getInt(field: Field, holder: Any?): Int {
-            return if (java.lang.reflect.Modifier.isStatic(field.modifiers)) {
-                field.getInt(null)
-            } else {
-                field.getInt(holder)
-            }
-        }
-
-        private fun setInt(field: Field, value: Int, holder: Any?) {
-            if (java.lang.reflect.Modifier.isStatic(field.modifiers)) {
-                field.setInt(null, value)
-            } else if (holder != null) {
-                field.setInt(holder, value)
-            }
+    // Xiaomi's callback reads shared native colors on every animation frame. Supply the
+    // committed palette here so background native palette updates cannot leak into a frame.
+    private class GradientValueHook : Hooker {
+        override fun intercept(chain: Chain): Any? {
+            return callbackColors ?: chain.proceed()
         }
     }
 }
