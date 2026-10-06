@@ -5,8 +5,6 @@ import com.lidesheng.hyperlyric.common.RootConstants
 import com.lidesheng.hyperlyric.lyric.model.LyricMediaMetadata
 import com.lidesheng.hyperlyric.lyric.source.LyricSink
 import com.lidesheng.hyperlyric.lyric.source.LyricSource
-import com.lidesheng.hyperlyric.root.LyriconDataBridge
-import com.lidesheng.hyperlyric.root.island.renderer.SystemUiLyricRenderer
 import com.lidesheng.hyperlyric.root.utils.HookLogger
 import io.github.proify.lyricon.lyric.model.Song
 import io.github.proify.lyricon.subscriber.ActivePlayerListener
@@ -41,6 +39,8 @@ class LyriconSource : LyricSource {
     private var activeProviderPackageName: String? = null
     private var activePlayerPackageName: String? = null
     private var activeProviderDelayMs: Int = RootConstants.DEFAULT_HOOK_LYRICON_PROVIDER_DELAY
+    private var arbiter: LyricSessionArbiter? = null
+    private var activePlayerListener: ActivePlayerListener? = null
     private var prefs: android.content.SharedPreferences? = null
 
 
@@ -55,13 +55,18 @@ class LyriconSource : LyricSource {
             HookLogger.w(TAG, "数据源启动延后: reason=application_unavailable")
             return
         }
-        initializeSubscriber(application)
+        val owner = LyricSessionArbiter(application, sink, 33L)
+        arbiter = owner
+        owner.start()
+        initializeSubscriber(application, owner)
         HookLogger.d(TAG, "数据源已启动")
     }
 
     override fun stop() {
+        val owner = arbiter
+        owner?.close()
         try {
-            subscriber?.unsubscribeActivePlayer(activePlayerListener)
+            activePlayerListener?.let { subscriber?.unsubscribeActivePlayer(it) }
             subscriber?.unregister()
             subscriber?.destroy()
         } catch (e: Exception) {
@@ -70,7 +75,9 @@ class LyriconSource : LyricSource {
             subscriber = null
             activeProviderPackageName = null
             activePlayerPackageName = null
-            sink?.onStop()
+            if (owner == null) sink?.onStop()
+            arbiter = null
+            activePlayerListener = null
             sink = null
         }
         HookLogger.d(TAG, "数据源已停止")
@@ -103,16 +110,18 @@ class LyriconSource : LyricSource {
     }
 
 
-    private fun initializeSubscriber(app: Application) {
+    private fun initializeSubscriber(app: Application, owner: LyricSessionArbiter) {
         val sub = LyriconFactory.createSubscriber(app)
         subscriber = sub
 
-        sub.addConnectionListener(connectionListener)
-        sub.subscribeActivePlayer(activePlayerListener)
+        val playerListener = createPlayerListener(owner)
+        activePlayerListener = playerListener
+        sub.addConnectionListener(createConnectionListener(owner))
+        sub.subscribeActivePlayer(playerListener)
         sub.register()
     }
 
-    private val connectionListener = object : ConnectionListener {
+    private fun createConnectionListener(owner: LyricSessionArbiter) = object : ConnectionListener {
         override fun onConnected(subscriber: LyriconSubscriber) {
             HookLogger.d(TAG, "订阅连接已建立")
         }
@@ -124,83 +133,59 @@ class LyriconSource : LyricSource {
         override fun onDisconnected(subscriber: LyriconSubscriber) {
             if (this@LyriconSource.subscriber !== subscriber) return
             HookLogger.w(TAG, "订阅连接已断开")
-            clearActivePlayerState()
+            owner.execute { clearActivePlayerState(owner) }
         }
 
         override fun onConnectTimeout(subscriber: LyriconSubscriber) {
             if (this@LyriconSource.subscriber !== subscriber) return
             HookLogger.w(TAG, "订阅连接超时")
-            clearActivePlayerState()
+            owner.execute { clearActivePlayerState(owner) }
         }
     }
 
-    private val activePlayerListener = object : ActivePlayerListener {
+    private fun createPlayerListener(owner: LyricSessionArbiter) = object : ActivePlayerListener {
         override fun onActiveProviderChanged(providerInfo: ProviderInfo?) {
-            val playerPackage = providerInfo?.playerPackageName ?: "none"
-            val providerPackage = providerInfo?.providerPackageName ?: "none"
-            val processName = providerInfo?.processName ?: "none"
-            HookLogger.dState(
-                stateId = "LyriconSource.activePlayer",
-                tag = TAG,
-                state = "$providerPackage|$playerPackage|$processName"
-            ) {
-                "活跃播放器变更: provider=$providerPackage, player=$playerPackage, " +
-                        "process=$processName"
-            }
-            sink?.onStop()
-            activeProviderPackageName = providerInfo?.providerPackageName
-            activePlayerPackageName = providerInfo?.playerPackageName
-            activeProviderDelayMs = providerInfo?.providerPackageName
-                ?.let(::readProviderDelay)
-                ?: RootConstants.DEFAULT_HOOK_LYRICON_PROVIDER_DELAY
-
-            // Lyricon providers may publish plain text without an accompanying Song. Publish the
-            // player identity at the source-session boundary so the first text event can still
-            // pass the package-aware island policy without inferring ownership from MediaSession.
-            activePlayerPackageName?.takeIf { it.isNotBlank() }?.let { packageName ->
-                sink?.onMetadata(
-                    LyricMediaMetadata(
-                        sourceId = id,
-                        packageName = packageName
-                    )
-                )
+            owner.execute {
+                val previous = activePlayerPackageName
+                val next = providerInfo?.playerPackageName
+                if (previous != null && previous != next) owner.detachStreamingOwner(previous)
+                activeProviderPackageName = providerInfo?.providerPackageName
+                activePlayerPackageName = next
+                activeProviderDelayMs = providerInfo?.providerPackageName?.let(::readProviderDelay)
+                    ?: RootConstants.DEFAULT_HOOK_LYRICON_PROVIDER_DELAY
             }
         }
 
 
         override fun onSongChanged(song: Song?) {
             val localSong = song?.toLocalSong()
-            sink?.onSongChanged(localSong)
-            sink?.onMetadata(
-                localSong?.let {
-                    LyricMediaMetadata(
-                        sourceId = id,
-                        packageName = activePlayerPackageName,
-                        songId = it.id,
-                        title = it.name,
-                        artist = it.artist,
-                        album = it.album,
-                        duration = it.duration.takeIf { duration -> duration > 0L }
-                    )
-                }
-            )
-            SystemUiLyricRenderer.refreshActiveIsland()
+            publish(owner) { packageName ->
+                onSongChanged(localSong)
+                onMetadata(LyricMediaMetadata(
+                    sourceId = id, packageName = packageName, songId = localSong?.id,
+                    title = localSong?.name, artist = localSong?.artist, album = localSong?.album,
+                    duration = localSong?.duration?.takeIf { it > 0L }
+                ))
+            }
         }
 
+
         override fun onPlaybackStateChanged(isPlaying: Boolean) {
-            sink?.onPlaybackStateChanged(isPlaying)
+            publish(owner) { onPlaybackStateChanged(isPlaying) }
         }
 
         override fun onPositionChanged(position: Long) {
-            val adjustedPosition = (position - activeProviderDelayMs).coerceAtLeast(0L)
-            sink?.onPositionChanged(adjustedPosition)
+            publish(owner) { onPositionChanged(position) }
         }
 
 
         override fun onSeekTo(position: Long) {}
 
         override fun onReceiveText(text: String?) {
-            sink?.onPlainText(text)
+            publish(owner) { packageName ->
+                onMetadata(LyricMediaMetadata(sourceId = id, packageName = packageName))
+                onPlainText(text)
+            }
         }
 
         // 提供器只负责提供歌词内容；翻译和罗马音是否显示由 HyperLyric 显示端配置决定。
@@ -209,10 +194,17 @@ class LyriconSource : LyricSource {
         override fun onDisplayRomaChanged(isDisplayRoma: Boolean) = Unit
     }
 
-    private fun clearActivePlayerState() {
+    private fun publish(owner: LyricSessionArbiter, block: LyricSink.(String) -> Unit) {
+        owner.execute {
+            val packageName = activePlayerPackageName?.takeIf { it.isNotBlank() } ?: return@execute
+            owner.update(packageName, packageName, delayMs = activeProviderDelayMs) { block(packageName) }
+        }
+    }
+
+    private fun clearActivePlayerState(owner: LyricSessionArbiter) {
         activeProviderPackageName = null
         activePlayerPackageName = null
         activeProviderDelayMs = RootConstants.DEFAULT_HOOK_LYRICON_PROVIDER_DELAY
-        sink?.onStop()
+        owner.clear()
     }
 }

@@ -1,0 +1,381 @@
+package com.lidesheng.hyperlyric.root.source
+
+import android.content.Context
+import android.media.MediaMetadata
+import android.media.session.MediaController
+import android.media.session.MediaSession
+import android.media.session.MediaSessionManager
+import android.media.session.PlaybackState
+import android.os.Handler
+import android.os.Looper
+import com.lidesheng.hyperlyric.common.media.MediaMetadataHelper
+import com.lidesheng.hyperlyric.lyric.model.LyricMediaMetadata
+import com.lidesheng.hyperlyric.lyric.model.Song
+import com.lidesheng.hyperlyric.lyric.model.interfaces.IRichLyricLine
+import com.lidesheng.hyperlyric.lyric.source.LyricSink
+import com.lidesheng.hyperlyric.root.utils.HookLogger
+
+/** One source owns this arbiter. All snapshots and downstream writes are serialized on main. */
+internal class LyricSessionArbiter(
+    context: Context,
+    private val downstream: LyricSink,
+    private val sampleIntervalMs: Long,
+    private val onOwnerRemoved: (Any) -> Unit = {}
+) {
+    private val manager = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
+    private val handler = Handler(Looper.getMainLooper())
+    // Exact tokens and unbound publisher keys share one chronology.
+    private val order = LyricPlaybackOrder<Any>()
+    private data class Session(val controller: MediaController, val callback: MediaController.Callback)
+    private val sessions = LinkedHashMap<MediaSession.Token, Session>()
+    private val slots = LinkedHashMap<Any, Slot>()
+    private val removedPublishers = HashSet<String>()
+    private var selected: Slot? = null
+    private var sampling: Slot? = null
+    @Volatile private var closed = false
+    private var listenerRegistered = false
+    private val listener = MediaSessionManager.OnActiveSessionsChangedListener { syncSessions(it.orEmpty()) }
+
+    fun start() {
+        execute {
+            runCatching {
+                manager.addOnActiveSessionsChangedListener(listener, null, handler)
+                listenerRegistered = true
+                syncSessions(manager.getActiveSessions(null))
+            }.onFailure { HookLogger.w("LyricSessionArbiter", "媒体会话监听失败", it) }
+        }
+    }
+
+    fun execute(block: () -> Unit) {
+        val guarded = {
+            if (!closed) {
+                try { block() }
+                catch (e: Exception) { HookLogger.w("LyricSessionArbiter", "歌词会话事件处理失败", e) }
+            }
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) guarded() else handler.post { guarded() }
+    }
+
+    fun update(
+        key: Any,
+        packageName: String,
+        token: MediaSession.Token? = null,
+        delayMs: Int = 0,
+        block: LyricSink.() -> Unit
+    ) = execute {
+        if (key is String && key in removedPublishers) {
+            if (sessions.values.none { it.controller.packageName == packageName }) return@execute
+            removedPublishers.remove(key)
+        }
+        val slot = slots.getOrPut(key) { Slot(key, packageName, token) }
+        slot.delayMs = delayMs
+        bind(slot)
+        slot.detached = false
+        slot.block()
+        if (slot.token == null) order.update(key, slot.playing)
+        if (slot.requiresSelection) {
+            reconcile()
+        } else if (slot === selected && slot.positionDirty) {
+            // Position cannot change ownership or display eligibility.
+            publishPosition(slot)
+        }
+        // An unselected snapshot is replayed in full when it wins; it needs no pending flags.
+        slot.clearChanges()
+    }
+
+    /** Current unadjusted position of this publisher. Call within execute/update on main. */
+    fun currentPosition(key: Any): Long {
+        val slot = slots[key] ?: return -1L
+        val state = slot.token?.let { sessions[it]?.controller?.playbackState }
+        return if (state != null) MediaMetadataHelper.estimatePlaybackPosition(state) else slot.position
+    }
+
+    fun remove(key: Any) = execute {
+        slots.remove(key)?.let { if (it.token == null) order.remove(key) }
+        reconcile()
+    }
+
+    /** Only a complete timeline can keep advancing while Lyricon hides this publisher. */
+    fun detachStreamingOwner(key: Any) = execute {
+        val slot = slots[key] ?: return@execute
+        slot.detached = true
+        if (slot.token == null || slot.song?.lyrics.isNullOrEmpty()) slot.onStop()
+        reconcile()
+        slot.clearChanges()
+    }
+
+    fun clear() = execute {
+        slots.values.forEach { if (it.token == null) order.remove(it.key) }
+        slots.clear()
+        removedPublishers.clear()
+        reconcile()
+    }
+
+    fun close() {
+        closed = true // Reject already queued Binder callbacks before unregistering on main.
+        val cleanup = {
+            handler.removeCallbacks(sample)
+            sampling = null
+            if (listenerRegistered) runCatching { manager.removeOnActiveSessionsChangedListener(listener) }
+            sessions.values.forEach { runCatching { it.controller.unregisterCallback(it.callback) } }
+            sessions.clear()
+            slots.clear()
+            order.clear()
+            removedPublishers.clear()
+            selected = null
+            downstream.onStop()
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) cleanup() else handler.post { cleanup() }
+    }
+
+    private fun syncSessions(controllers: List<MediaController>) {
+        if (closed) return
+        val tokens = controllers.map { it.sessionToken }.toSet()
+        sessions.keys.filter { it !in tokens }.forEach { token ->
+            sessions.remove(token)?.let { runCatching { it.controller.unregisterCallback(it.callback) } }
+            order.remove(token)
+            slots.entries.filter { it.value.token == token }.map { it.key }.forEach {
+                slots.remove(it)
+                if (it is String) removedPublishers += it
+                onOwnerRemoved(it)
+            }
+        }
+        order.seed(controllers.map { it.sessionToken to (it.playbackState?.state == PlaybackState.STATE_PLAYING) })
+        controllers.forEach { controller ->
+            val token = controller.sessionToken
+            if (token !in sessions) {
+                val callback = object : MediaController.Callback() {
+                    override fun onPlaybackStateChanged(state: PlaybackState?) {
+                        if (closed || sessions[token]?.controller !== controller) return
+                        order.update(token, state?.state == PlaybackState.STATE_PLAYING)
+                        // A playback transition may make a previously ambiguous package bindable.
+                        val packageSlots = slots.values.filter { it.packageName == controller.packageName }
+                        packageSlots.forEach(::bind)
+                        val affected = packageSlots.filter { it.token == token }
+                        affected.forEach {
+                            it.onPlaybackStateChanged(state?.state == PlaybackState.STATE_PLAYING,
+                                state?.playbackSpeed ?: Float.NaN)
+                            it.onPositionChanged(MediaMetadataHelper.estimatePlaybackPosition(state),
+                                state?.playbackSpeed ?: Float.NaN)
+                        }
+                        reconcile()
+                        affected.forEach { it.clearChanges() }
+                    }
+                    override fun onMetadataChanged(metadata: MediaMetadata?) {
+                        if (closed || sessions[token]?.controller !== controller) return
+                        val affected = slots.values.filter { it.token == token }
+                        affected.forEach { checkTrack(it, metadata) }
+                        reconcile()
+                        affected.forEach { it.clearChanges() }
+                    }
+                    override fun onSessionDestroyed() {
+                        if (!closed) runCatching { syncSessions(manager.getActiveSessions(null)) }
+                    }
+                }
+                runCatching {
+                    controller.registerCallback(callback, handler)
+                    sessions[token] = Session(controller, callback)
+                }.onFailure { HookLogger.w("LyricSessionArbiter", "媒体会话回调注册失败", it) }
+            }
+        }
+        slots.values.forEach(::bind)
+        reconcile()
+    }
+
+    private fun bind(slot: Slot) {
+        if (slot.token == null) {
+            // A package is not a session identity. Do not guess when several sessions exist.
+            val matching = sessions.values.filter { it.controller.packageName == slot.packageName }
+            val playing = matching.filter { order.isPlaying(it.controller.sessionToken) }
+            val controller = (playing.singleOrNull() ?: matching.singleOrNull())?.controller
+            if (controller != null) {
+                slot.token = controller.sessionToken
+                order.remove(slot.key)
+                slot.metadataDirty = true
+                checkTrack(slot, controller.metadata)
+            }
+        }
+    }
+
+    private fun checkTrack(slot: Slot, metadata: MediaMetadata?) {
+        if (metadata == null) return
+        val id = metadata.getString(MediaMetadata.METADATA_KEY_MEDIA_ID)?.takeIf { it.isNotBlank() }
+        val title = metadata.getString(MediaMetadata.METADATA_KEY_TITLE)?.takeIf { it.isNotBlank() }
+        val previousId = slot.mediaId
+        val previousTitle = slot.mediaTitle
+        if (slot.detached && ((id != null && previousId != null && id != previousId) ||
+            (id == null && previousId == null && title != null && previousTitle != null && title != previousTitle))) {
+            slot.onStop()
+        }
+        slot.mediaId = id ?: previousId
+        slot.mediaTitle = title ?: previousTitle
+    }
+
+    private fun isPlaying(slot: Slot): Boolean {
+        val token = slot.token
+        if (token != null) return order.isPlaying(token)
+        // No controller yet: use the source signal only while MediaSession identity is unavailable.
+        if (sessions.values.any { it.controller.packageName == slot.packageName }) return false
+        return slot.playing
+    }
+
+    /** Choose whose source snapshot to publish. Renderers decide whether to display it. */
+    private fun selectOwner(): Slot? {
+        var playingLyrics: Slot? = null
+        var playingInfo: Slot? = null
+        var latestContent: Slot? = null
+        fun newer(candidate: Slot, current: Slot?): Boolean = current == null ||
+            order.rank(candidate.token ?: candidate.key) > order.rank(current.token ?: current.key)
+        for (slot in slots.values) {
+            if (!slot.hasContent) continue
+            if (newer(slot, latestContent)) latestContent = slot
+            if (!isPlaying(slot)) continue
+            if (newer(slot, playingInfo)) playingInfo = slot
+            if (slot.hasLyrics && newer(slot, playingLyrics)) playingLyrics = slot
+        }
+        return playingLyrics ?: playingInfo
+            ?: selected?.takeIf { slots[it.key] === it && it.hasContent }
+            ?: latestContent
+    }
+
+    private fun reconcile() {
+        val winner = selectOwner()
+        val switched = selected !== winner
+        if (switched) {
+            downstream.onStop()
+            selected = winner
+        }
+        if (winner != null) {
+            if (switched || winner.songDirty) downstream.onSongChanged(winner.song)
+            if (switched || winner.metadataDirty) downstream.onMetadata(
+                winner.metadata?.let { it.copy(sessionToken = it.sessionToken ?: winner.token) }
+            )
+            val playingNow = isPlaying(winner)
+            if (switched || winner.lastPlaying != playingNow || winner.playbackDirty) {
+                downstream.onPlaybackStateChanged(playingNow, winner.speed)
+                winner.lastPlaying = playingNow
+            }
+            if (switched || winner.contentDirty) {
+                winner.line?.let(downstream::onLyricLine)
+                if (winner.textSet) downstream.onPlainText(winner.text)
+            }
+            if (switched || winner.positionDirty || winner.playbackDirty) publishPosition(winner)
+            winner.clearChanges()
+        }
+        val sampleOwner = winner?.takeIf { isPlaying(it) && it.token != null }
+        if (sampling !== sampleOwner) {
+            handler.removeCallbacks(sample)
+            sampling = sampleOwner
+            if (sampleOwner != null) handler.postDelayed(sample, sampleIntervalMs)
+        }
+    }
+
+    private fun publishPosition(slot: Slot) {
+        val state = slot.token?.let { sessions[it]?.controller?.playbackState }
+        val position = if (state != null) MediaMetadataHelper.estimatePlaybackPosition(state) else slot.position
+        if (position >= 0L) downstream.onPositionChanged(
+            (position - slot.delayMs).coerceAtLeast(0L), state?.playbackSpeed ?: slot.speed
+        )
+    }
+
+    private val sample = object : Runnable {
+        override fun run() {
+            if (closed) return
+            val slot = selected ?: return
+            if (slot !== sampling) return
+            try {
+                publishPosition(slot)
+            } catch (e: Exception) {
+                HookLogger.w("LyricSessionArbiter", "选中会话位置采样失败", e)
+                sampling = null
+                return
+            }
+            if (isPlaying(slot)) handler.postDelayed(this, sampleIntervalMs)
+            else sampling = null
+        }
+    }
+
+    private class Slot(val key: Any, val packageName: String, var token: MediaSession.Token?) : LyricSink {
+        var song: Song? = null
+        private var songHasLyrics = false
+        var metadata: LyricMediaMetadata? = null
+        var line: IRichLyricLine? = null
+        var text: String? = null
+        var textSet = false
+        var detached = false
+        var playing = false
+        var speed = Float.NaN
+        var position = -1L
+        var delayMs = 0
+        var lastPlaying: Boolean? = null
+        var mediaId: String? = null
+        var mediaTitle: String? = null
+        var songDirty = false
+        var metadataDirty = false
+        var playbackDirty = false
+        var contentDirty = false
+        var positionDirty = false
+        val requiresSelection get() = songDirty || metadataDirty || playbackDirty || contentDirty
+        fun clearChanges() {
+            songDirty = false
+            metadataDirty = false
+            playbackDirty = false
+            contentDirty = false
+            positionDirty = false
+        }
+        val hasLyrics get() = songHasLyrics ||
+            !line?.text.isNullOrBlank() || !text.isNullOrBlank()
+        val hasContent get() = hasLyrics || metadata?.let {
+            !it.title.isNullOrBlank() || !it.artist.isNullOrBlank() || !it.album.isNullOrBlank()
+        } == true
+
+        override fun onSongChanged(song: Song?) {
+            this.song = song
+            songHasLyrics = song?.lyrics?.any {
+                !it.text.isNullOrBlank() && it.begin >= 0L && it.end > it.begin
+            } == true
+            line = null
+            text = null
+            textSet = false
+            songDirty = true
+            contentDirty = true
+            position = -1L
+        }
+        override fun onMetadata(metadata: LyricMediaMetadata?) {
+            this.metadata = metadata
+            metadataDirty = true
+        }
+        override fun onLyricLine(line: IRichLyricLine) {
+            this.line = line
+            textSet = false
+            text = null
+            contentDirty = true
+        }
+        override fun onPlainText(text: String?) {
+            if (song != null) {
+                song = null
+                songHasLyrics = false
+                songDirty = true
+            }
+            this.text = text
+            textSet = true
+            line = null
+            contentDirty = true
+        }
+        override fun onPlaybackStateChanged(isPlaying: Boolean, playbackSpeed: Float) {
+            playing = isPlaying
+            speed = playbackSpeed
+            playbackDirty = true
+        }
+        override fun onPositionChanged(position: Long, playbackSpeed: Float) {
+            this.position = position
+            speed = playbackSpeed
+            positionDirty = true
+        }
+        override fun onStop() {
+            onSongChanged(null)
+            onMetadata(null)
+            playing = false
+        }
+    }
+}
