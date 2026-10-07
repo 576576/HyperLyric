@@ -1,5 +1,7 @@
 package com.lidesheng.hyperlyric.root.statusbar
 
+import android.app.ActivityOptions
+import android.content.Context
 import android.content.Intent
 import android.media.session.MediaController
 import android.media.session.PlaybackState
@@ -186,6 +188,9 @@ internal class StatusBarLyricGestureController(
 
             RootConstants.STATUS_BAR_LYRIC_GESTURE_ACTION_OPEN_MEDIA_APP ->
                 performOpenMediaApp()
+
+            RootConstants.STATUS_BAR_LYRIC_GESTURE_ACTION_OPEN_MEDIA_APP_FREEFORM ->
+                performOpenMediaAppInFreeform()
         }
     }
 
@@ -199,37 +204,10 @@ internal class StatusBarLyricGestureController(
     }
 
     private fun performOpenMediaApp() {
-        if (!LyriconDataBridge.isPlaybackActive() ||
-            !LyriconDataBridge.hasLyricsForPresentation() ||
-            StatusBarLyricHostRegistry.liveHosts().none(StatusBarLyricHost::isShowingLyric)
-        ) {
-            return
-        }
-
-        val sourceMetadata = LyriconDataBridge.currentLyricMediaMetadata
-        val sourcePackage = LyriconDataBridge.currentLyricPackageName
-            ?.trim()
-            ?.takeIf(String::isNotEmpty)
-        val metadataPackage = sourceMetadata?.packageName
-            ?.trim()
-            ?.takeIf(String::isNotEmpty)
-        if (sourcePackage != null && metadataPackage != null &&
-            sourcePackage != metadataPackage
-        ) {
-            HookLogger.w(TAG, "当前歌词来源与媒体应用不匹配，忽略打开应用")
-            return
-        }
-
-        val controller = runCatching {
-            IslandPlaybackControllerResolver.resolveForCurrentLyric(touchView.context)
-        }.onFailure { error ->
-            HookLogger.w(TAG, "解析当前歌词对应的媒体会话失败，继续尝试按包名启动", error)
-        }.getOrNull()
-        val packageName = sourcePackage ?: metadataPackage ?: controller?.packageName
-        if (packageName.isNullOrBlank()) {
-            HookLogger.w(TAG, "缺少当前歌词对应的媒体应用包名，忽略打开应用")
-            return
-        }
+        val target = resolveCurrentMediaAppLaunchTarget() ?: return
+        val controller = target.controller
+        val packageName = target.packageName
+        val context = touchView.context
 
         if (controller?.packageName == packageName) {
             val sessionActivity = runCatching { controller.sessionActivity }
@@ -246,7 +224,6 @@ internal class StatusBarLyricGestureController(
             }
         }
 
-        val context = touchView.context
         val launchIntent = runCatching {
             context.packageManager.getLaunchIntentForPackage(packageName)
         }.onFailure { error ->
@@ -264,6 +241,102 @@ internal class StatusBarLyricGestureController(
             HookLogger.w(TAG, "启动媒体应用失败: package=$packageName", error)
         }
     }
+
+    private fun performOpenMediaAppInFreeform() {
+        val target = resolveCurrentMediaAppLaunchTarget() ?: return
+        val context = touchView.context
+        val packageName = target.packageName
+        val launchIntent = runCatching {
+            context.packageManager.getLaunchIntentForPackage(packageName)
+        }.onFailure { error ->
+            HookLogger.d(
+                TAG,
+                "查找媒体应用入口失败: ${error.javaClass.simpleName}, package=$packageName",
+            )
+        }.getOrNull()
+        if (launchIntent == null) {
+            HookLogger.w(TAG, "媒体应用没有可用启动入口: package=$packageName")
+            return
+        }
+        launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+        val freeformOptions = runCatching {
+            val apiClass = context.classLoader.loadClass("android.util.MiuiMultiWindowUtils")
+            val method = apiClass.getMethod(
+                "getActivityOptions",
+                Context::class.java,
+                String::class.java,
+                Boolean::class.javaPrimitiveType!!,
+                Boolean::class.javaPrimitiveType!!,
+            )
+            (method.invoke(null, context, packageName, true, false) as? ActivityOptions)
+                ?.toBundle()
+        }.onFailure { error ->
+            HookLogger.d(TAG, "获取小米 Freeform 参数失败: ${error.javaClass.simpleName}")
+        }.getOrNull()
+
+        val openedInFreeform = freeformOptions?.let { options ->
+            runCatching {
+                context.startActivity(launchIntent, options)
+                true
+            }.onFailure { error ->
+                HookLogger.d(TAG, "小窗启动失败: ${error.javaClass.simpleName}")
+            }.getOrDefault(false)
+        } ?: false
+        if (openedInFreeform) {
+            HookLogger.d(TAG, "已提交媒体应用 Freeform 启动请求: package=$packageName")
+            return
+        }
+
+        HookLogger.d(TAG, "Freeform 不可用，回退全屏启动: package=$packageName")
+        runCatching {
+            context.startActivity(launchIntent)
+            HookLogger.d(TAG, "已提交媒体应用全屏启动请求: package=$packageName")
+        }.onFailure { error ->
+            HookLogger.w(TAG, "媒体应用全屏启动失败: package=$packageName", error)
+        }
+    }
+
+    private fun resolveCurrentMediaAppLaunchTarget(): MediaAppLaunchTarget? {
+        if (!LyriconDataBridge.isPlaybackActive() ||
+            !LyriconDataBridge.hasLyricsForPresentation() ||
+            StatusBarLyricHostRegistry.liveHosts().none(StatusBarLyricHost::isShowingLyric)
+        ) {
+            return null
+        }
+
+        val sourceMetadata = LyriconDataBridge.currentLyricMediaMetadata
+        val sourcePackage = LyriconDataBridge.currentLyricPackageName
+            ?.trim()
+            ?.takeIf(String::isNotEmpty)
+        val metadataPackage = sourceMetadata?.packageName
+            ?.trim()
+            ?.takeIf(String::isNotEmpty)
+        if (sourcePackage != null && metadataPackage != null &&
+            sourcePackage != metadataPackage
+        ) {
+            HookLogger.w(TAG, "当前歌词来源与媒体应用不匹配，忽略打开应用")
+            return null
+        }
+
+        val controller = runCatching {
+            IslandPlaybackControllerResolver.resolveForCurrentLyric(touchView.context)
+        }.onFailure { error ->
+            HookLogger.w(TAG, "解析当前歌词对应的媒体会话失败，继续尝试按包名启动", error)
+        }.getOrNull()
+        val packageName = sourcePackage ?: metadataPackage ?: controller?.packageName
+        if (packageName.isNullOrBlank()) {
+            HookLogger.w(TAG, "缺少当前歌词对应的媒体应用包名，忽略打开应用")
+            return null
+        }
+
+        return MediaAppLaunchTarget(packageName, controller)
+    }
+
+    private data class MediaAppLaunchTarget(
+        val packageName: String,
+        val controller: MediaController?,
+    )
 
     private fun performSwipeAction(action: Int) {
         when (action) {
@@ -375,6 +448,7 @@ internal class StatusBarLyricGestureController(
             RootConstants.STATUS_BAR_LYRIC_GESTURE_ACTION_TOGGLE_PLAYBACK,
             RootConstants.STATUS_BAR_LYRIC_GESTURE_ACTION_TEMPORARY_CLOCK,
             RootConstants.STATUS_BAR_LYRIC_GESTURE_ACTION_OPEN_MEDIA_APP,
+            RootConstants.STATUS_BAR_LYRIC_GESTURE_ACTION_OPEN_MEDIA_APP_FREEFORM,
             RootConstants.STATUS_BAR_LYRIC_GESTURE_ACTION_TEMPORARY_HIDE_LYRIC,
         )
         val SWIPE_ACTIONS = setOf(
