@@ -18,8 +18,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.lidesheng.hyperlyric.R
 import com.lidesheng.hyperlyric.common.LyricEnhancementCacheEntry
+import com.lidesheng.hyperlyric.common.LyricEnhancementCacheDetailLabels
 import com.lidesheng.hyperlyric.common.LyricEnhancementConstants
 import com.lidesheng.hyperlyric.ui.component.SimpleDialog
+import com.lidesheng.hyperlyric.ui.navigation.LocalNavigator
+import com.lidesheng.hyperlyric.ui.navigation.Route
 import com.lidesheng.hyperlyric.ui.page.hooksettings.lyrics.common.XposedLyricSettingPage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -38,6 +41,7 @@ import top.yukonga.miuix.kmp.preference.ArrowPreference
 @Composable
 internal fun AiTranslationCachePage() {
     val context = LocalContext.current
+    val navigator = LocalNavigator.current
     val sender = remember(context) { LyricEnhancementCacheCommandSender(context) }
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -46,12 +50,14 @@ internal fun AiTranslationCachePage() {
     val failedText = stringResource(R.string.toast_lyric_enhancement_cache_failed)
     val unavailableText = stringResource(R.string.toast_lyric_enhancement_cache_unavailable)
     val retryText = stringResource(R.string.lyric_enhancement_cache_retry)
-    val deleteEntryText = stringResource(R.string.title_lyric_enhancement_cache_delete_entry)
     val deleteAllText = stringResource(R.string.title_lyric_enhancement_cache_clear_all)
     val deleteSuccessText = stringResource(R.string.toast_lyric_enhancement_cache_entry_cleared)
     val deleteAllSuccessText = stringResource(
         R.string.toast_lyric_enhancement_cache_all_cleared
     )
+    val unknownValue = stringResource(R.string.lyric_enhancement_cache_unknown_value)
+    val languageLabel = stringResource(R.string.label_ai_translation_cache_language)
+    val modelLabel = stringResource(R.string.label_ai_translation_cache_model)
 
     var state by remember {
         mutableStateOf<AiTranslationCachePageState>(AiTranslationCachePageState.Loading)
@@ -59,8 +65,10 @@ internal fun AiTranslationCachePage() {
     var busy by remember { mutableStateOf(false) }
     var initialLoadCompleted by remember { mutableStateOf(false) }
     var isRefreshing by remember { mutableStateOf(false) }
-    var selectedEntry by remember { mutableStateOf<LyricEnhancementCacheEntry?>(null) }
     var showClearAllDialog by remember { mutableStateOf(false) }
+    var seenEntriesVersion by remember {
+        mutableStateOf(AiTranslationCacheEntriesVersion.version)
+    }
 
     fun loadEntries(refresh: Boolean = false) {
         if (busy) return
@@ -100,47 +108,6 @@ internal fun AiTranslationCachePage() {
         }
     }
 
-    fun deleteEntry(entry: LyricEnhancementCacheEntry) {
-        if (busy) return
-        selectedEntry = null
-        busy = true
-        scope.launch {
-            val outcome = withContext(Dispatchers.IO) {
-                sender.clearEntry(
-                    featureId = LyricEnhancementConstants.AI_TRANSLATION_FEATURE_ID,
-                    entryId = entry.id
-                )
-            }
-            busy = false
-            if (outcome is LyricEnhancementCacheOperationOutcome.Completed &&
-                outcome.response.success
-            ) {
-                val current = state
-                state = if (current is AiTranslationCachePageState.Entries) {
-                    current.entries.filterNot { it.id == entry.id }
-                        .takeIf { it.isNotEmpty() }
-                        ?.let(AiTranslationCachePageState::Entries)
-                        ?: AiTranslationCachePageState.Empty
-                } else {
-                    current
-                }
-                snackbarHostState.showSnackbar(
-                    deleteSuccessText,
-                    duration = SnackbarDuration.Custom(2500L)
-                )
-            } else {
-                snackbarHostState.showSnackbar(
-                    if (outcome is LyricEnhancementCacheOperationOutcome.Unavailable) {
-                        unavailableText
-                    } else {
-                        failedText
-                    },
-                    duration = SnackbarDuration.Custom(2500L)
-                )
-            }
-        }
-    }
-
     fun clearAll() {
         if (busy) return
         showClearAllDialog = false
@@ -171,7 +138,18 @@ internal fun AiTranslationCachePage() {
         }
     }
 
-    LaunchedEffect(Unit) { loadEntries() }
+    LaunchedEffect(AiTranslationCacheEntriesVersion.version) {
+        val deletedSinceLastLoad =
+            AiTranslationCacheEntriesVersion.version != seenEntriesVersion
+        seenEntriesVersion = AiTranslationCacheEntriesVersion.version
+        loadEntries(refresh = deletedSinceLastLoad)
+        if (deletedSinceLastLoad) {
+            snackbarHostState.showSnackbar(
+                deleteSuccessText,
+                duration = SnackbarDuration.Custom(2500L)
+            )
+        }
+    }
 
     XposedLyricSettingPage(
         title = stringResource(R.string.title_ai_translation_cache),
@@ -214,28 +192,35 @@ internal fun AiTranslationCachePage() {
 
             is AiTranslationCachePageState.Entries -> {
                 items(current.entries, key = { it.id }) { entry ->
-                    itemCard(entry, busy) { selectedEntry = entry }
+                    itemCard(entry, busy) {
+                        val details = entry.details.associate { it.label to it.value }
+                        navigator.navigate(
+                            Route.AiTranslationCacheDetail(
+                                entryId = entry.id,
+                                title = entry.title,
+                                sizeBytes = entry.sizeBytes,
+                                updatedAtEpochMs = entry.updatedAtEpochMs,
+                                details = listOf(
+                                    Route.CacheDetailLine(
+                                        languageLabel,
+                                        details[LyricEnhancementCacheDetailLabels.AI_TRANSLATION_LANGUAGE]
+                                            ?.takeIf(String::isNotBlank)
+                                            ?: unknownValue
+                                    ),
+                                    Route.CacheDetailLine(
+                                        modelLabel,
+                                        details[LyricEnhancementCacheDetailLabels.AI_TRANSLATION_MODEL]
+                                            ?.takeIf(String::isNotBlank)
+                                            ?: unknownValue
+                                    )
+                                )
+                            )
+                        )
+                    }
                 }
             }
         }
     }
-
-    val entry = selectedEntry
-    val entrySummary = if (entry == null) {
-        null
-    } else {
-        stringResource(
-            R.string.dialog_lyric_enhancement_cache_clear_entry_summary,
-            entry.title
-        )
-    }
-    SimpleDialog(
-        show = entry != null,
-        title = deleteEntryText,
-        summary = entrySummary,
-        onDismiss = { selectedEntry = null },
-        onConfirm = { entry?.let(::deleteEntry) }
-    )
 
     SimpleDialog(
         show = showClearAllDialog,
@@ -299,4 +284,8 @@ private sealed interface AiTranslationCachePageState {
     data object Empty : AiTranslationCachePageState
     data class Entries(val entries: List<LyricEnhancementCacheEntry>) : AiTranslationCachePageState
     data class Failure(val message: String) : AiTranslationCachePageState
+}
+
+internal object AiTranslationCacheEntriesVersion {
+    var version by mutableStateOf(0)
 }

@@ -30,6 +30,7 @@ import com.lidesheng.hyperlyric.ui.page.hooksettings.media.notification.Notifica
 import com.lidesheng.hyperlyric.ui.page.lyricenhancement.LyricEnhancementPage
 import com.lidesheng.hyperlyric.ui.page.lyricenhancement.LyricEnhancementSettingsPage
 import com.lidesheng.hyperlyric.ui.page.lyricenhancement.AiTranslationCachePage
+import com.lidesheng.hyperlyric.ui.page.lyricenhancement.AiTranslationCacheDetailPage
 import com.lidesheng.hyperlyric.ui.page.lyricenhancement.AmllTtmlCachePage
 import com.lidesheng.hyperlyric.ui.page.lyricenhancement.AmllTtmlCacheDetailPage
 import top.yukonga.miuix.kmp.nav.core.NavDisplay
@@ -65,6 +66,7 @@ fun AppNavigation(startRoute: Route) {
             entry<Route.AmllTtmlCache> { AmllTtmlCachePage() }
             entry<Route.AmllTtmlCacheDetail> { AmllTtmlCacheDetailPage(it) }
             entry<Route.AiTranslationCache> { AiTranslationCachePage() }
+            entry<Route.AiTranslationCacheDetail> { AiTranslationCacheDetailPage(it) }
             entry<Route.HookSettings> { HookSettingsPage() }
             entry<Route.LyricSource> { LyricSourcePage() }
             entry<Route.LyricAnimation> { LyricAnimationPage() }

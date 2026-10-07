@@ -40,6 +40,15 @@ sealed interface Route : NavKey {
     data object AiTranslationCache : Route
 
     @Serializable
+    data class AiTranslationCacheDetail(
+        val entryId: String,
+        val title: String,
+        val sizeBytes: Long? = null,
+        val updatedAtEpochMs: Long? = null,
+        val details: List<CacheDetailLine> = emptyList(),
+    ) : Route
+
+    @Serializable
     data object HookSettings : Route
 
     @Serializable

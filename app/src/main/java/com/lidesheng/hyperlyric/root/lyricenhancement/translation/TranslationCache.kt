@@ -1,6 +1,8 @@
 package com.lidesheng.hyperlyric.root.lyricenhancement.translation
 
 import com.lidesheng.hyperlyric.common.LyricEnhancementCacheEntry
+import com.lidesheng.hyperlyric.common.LyricEnhancementCacheDetail
+import com.lidesheng.hyperlyric.common.LyricEnhancementCacheDetailLabels
 import com.lidesheng.hyperlyric.root.lyricenhancement.LyricEnhancementCacheStore
 import com.lidesheng.hyperlyric.root.utils.HookLogger
 import org.json.JSONArray
@@ -10,8 +12,8 @@ import java.util.Collections
 /**
  * AI 翻译缓存。
  *
- * 翻译正文仍只由 SystemUI 持有；索引只保存缓存管理页面需要的歌名和歌手。索引格式升级
- * 时保留旧的 v1 key 数组读取能力，旧条目在没有元数据的情况下以“未知歌曲”展示。
+ * 翻译正文仍只由 SystemUI 持有；v2 索引保存缓存管理页面所需的歌曲和翻译配置元数据。
+ * 新增字段均可缺省，旧的 v2 条目与 v1 key 数组仍可读取；旧条目缺少的翻译信息保持未知。
  */
 internal class TranslationCache(
     private val storage: LyricEnhancementCacheStore,
@@ -71,6 +73,8 @@ internal class TranslationCache(
         expectedGeneration: Long = currentGeneration(),
         title: String? = null,
         artist: String? = null,
+        targetLanguage: String? = null,
+        modelName: String? = null,
     ) {
         if (items.isEmpty()) return
         synchronized(lock) {
@@ -87,7 +91,9 @@ internal class TranslationCache(
             val record = CacheRecord(
                 key = key,
                 title = title.orEmpty().ifBlank { UNKNOWN_TITLE },
-                artist = artist.orEmpty().ifBlank { null }
+                artist = artist.orEmpty().ifBlank { null },
+                targetLanguage = targetLanguage.orEmpty().trim().takeIf { it.isNotBlank() },
+                modelName = modelName.orEmpty().trim().takeIf { it.isNotBlank() }
             )
             val updated = readIndexLocked().toMutableList().apply {
                 removeAll { it.key == key }
@@ -115,16 +121,40 @@ internal class TranslationCache(
     fun listEntries(): List<LyricEnhancementCacheEntry> = synchronized(lock) {
         readIndexLocked().asSequence()
             .take(MAX_LIST_ENTRIES)
-            .filter { record ->
-                runCatching { storage.getString(entryKey(record.key)) }
+            .mapNotNull { record ->
+                val storageKey = entryKey(record.key)
+                val body = runCatching { storage.getString(storageKey) }
                     .onFailure { HookLogger.w(LOG_TAG, "读取翻译缓存条目失败", it) }
-                    .getOrNull() != null
-            }
-            .map { record ->
+                    .getOrNull() ?: return@mapNotNull null
+                val lastModifiedEpochMs = runCatching {
+                    storage.getLastModifiedEpochMs(storageKey)
+                }
+                    .onFailure { HookLogger.w(LOG_TAG, "读取翻译缓存文件时间失败", it) }
+                    .getOrNull()
                 LyricEnhancementCacheEntry(
                     id = record.key,
                     title = record.title,
-                    artist = record.artist
+                    artist = record.artist,
+                    sizeBytes = body.toByteArray(Charsets.UTF_8).size.toLong(),
+                    updatedAtEpochMs = lastModifiedEpochMs,
+                    details = buildList {
+                        record.targetLanguage?.let {
+                            add(
+                                LyricEnhancementCacheDetail(
+                                    LyricEnhancementCacheDetailLabels.AI_TRANSLATION_LANGUAGE,
+                                    it
+                                )
+                            )
+                        }
+                        record.modelName?.let {
+                            add(
+                                LyricEnhancementCacheDetail(
+                                    LyricEnhancementCacheDetailLabels.AI_TRANSLATION_MODEL,
+                                    it
+                                )
+                            )
+                        }
+                    }
                 )
             }
             .toList()
@@ -206,7 +236,10 @@ internal class TranslationCache(
         return CacheRecord(
             key = key,
             title = title,
-            artist = json.optString("artist", "").trim().takeIf { it.isNotBlank() }
+            artist = json.optString("artist", "").trim().takeIf { it.isNotBlank() },
+            targetLanguage = json.optString("targetLanguage", "")
+                .trim().takeIf { it.isNotBlank() },
+            modelName = json.optString("modelName", "").trim().takeIf { it.isNotBlank() }
         )
     }
 
@@ -229,9 +262,11 @@ internal class TranslationCache(
         val record = CacheRecord(
             key = key,
             title = title.orEmpty().ifBlank { existing?.title ?: UNKNOWN_TITLE },
-            artist = artist.orEmpty().ifBlank { existing?.artist }
+            artist = artist.orEmpty().ifBlank { existing?.artist },
+            targetLanguage = existing?.targetLanguage,
+            modelName = existing?.modelName
         )
-        if (existing?.title == record.title && existing.artist == record.artist) return
+        if (existing == record) return
         writeIndexLocked(index.filterNot { it.key == key }.let { listOf(record) + it })
     }
 
@@ -263,6 +298,8 @@ internal class TranslationCache(
                         .put("title", record.title)
                         .also { item ->
                             record.artist?.let { item.put("artist", it) }
+                            record.targetLanguage?.let { item.put("targetLanguage", it) }
+                            record.modelName?.let { item.put("modelName", it) }
                         }
                 )
             }
@@ -275,6 +312,8 @@ internal class TranslationCache(
         val key: String,
         val title: String,
         val artist: String?,
+        val targetLanguage: String? = null,
+        val modelName: String? = null,
     )
 
     data class CacheLookup(

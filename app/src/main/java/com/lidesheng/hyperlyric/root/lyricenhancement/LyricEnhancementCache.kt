@@ -15,6 +15,8 @@ internal interface LyricEnhancementCacheStore {
     fun remove(key: String)
 
     fun clear(): Boolean
+
+    fun getLastModifiedEpochMs(key: String): Long? = null
 }
 
 internal class FileLyricEnhancementCache(
@@ -46,6 +48,18 @@ internal class FileLyricEnhancementCache(
     override fun getString(key: String): String? {
         if (!isValidKey(key)) return null
         return synchronized(lock) { readFileValue(fileForKey(key)) }
+    }
+
+    override fun getLastModifiedEpochMs(key: String): Long? {
+        if (!isValidKey(key)) return null
+        return synchronized(lock) {
+            val file = fileForKey(key)
+            val backup = File(file.path + ".bak")
+            val metadataFile = file.takeIf { it.isFile }
+                ?: backup.takeIf { it.isFile }
+                ?: return@synchronized null
+            metadataFile.lastModified().takeIf { it > 0L }
+        }
     }
 
     override fun putString(key: String, value: String) {

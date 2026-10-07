@@ -77,7 +77,9 @@ internal class AiTranslationEngine(
                         items = validItems,
                         expectedGeneration = cacheGeneration,
                         title = song.name,
-                        artist = song.artist
+                        artist = song.artist,
+                        targetLanguage = config.targetLanguage,
+                        modelName = config.model
                     )
                     TranslationApplicator.apply(
                         song,

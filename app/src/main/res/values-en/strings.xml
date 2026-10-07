@@ -664,10 +664,14 @@
     <string name="title_amll_ttml_cache">AMLL Lyrics Cache</string>
     <string name="summary_amll_ttml_cache">View cached AMLL TTML lyrics</string>
     <string name="title_ai_translation_cache">AI Translation Cache</string>
+    <string name="title_ai_translation_cache_detail">Translation Cache Details</string>
+    <string name="label_ai_translation_cache_language">Translation language</string>
+    <string name="label_ai_translation_cache_model">Translation model</string>
     <string name="lyric_enhancement_cache_loading">Reading cache…</string>
     <string name="lyric_enhancement_cache_empty">No cache entries</string>
     <string name="lyric_enhancement_cache_retry">Reload</string>
     <string name="lyric_enhancement_cache_unknown_artist">Unknown artist</string>
+    <string name="lyric_enhancement_cache_unknown_value">Unknown</string>
     <string name="title_lyric_enhancement_cache_delete_entry">Delete Cache</string>
     <string name="title_lyric_enhancement_cache_clear_all">Clear All Cache</string>
     <string name="dialog_lyric_enhancement_cache_clear_entry_summary">Delete the cache for “%1$s”?</string>

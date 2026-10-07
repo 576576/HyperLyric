@@ -35,6 +35,11 @@ internal data class LyricEnhancementCacheDetail(
     val value: String,
 )
 
+internal object LyricEnhancementCacheDetailLabels {
+    const val AI_TRANSLATION_LANGUAGE = "target_language"
+    const val AI_TRANSLATION_MODEL = "model_name"
+}
+
 internal data class LyricEnhancementCacheEntry(
     val id: String,
     val title: String,

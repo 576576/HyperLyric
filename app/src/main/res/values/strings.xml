@@ -673,10 +673,14 @@
     <string name="title_amll_ttml_cache">AMLL 歌词缓存</string>
     <string name="summary_amll_ttml_cache">查看已缓存的 AMLL TTML 歌词</string>
     <string name="title_ai_translation_cache">AI 翻译缓存</string>
+    <string name="title_ai_translation_cache_detail">翻译缓存详情</string>
+    <string name="label_ai_translation_cache_language">翻译语言</string>
+    <string name="label_ai_translation_cache_model">翻译模型</string>
     <string name="lyric_enhancement_cache_loading">正在读取缓存…</string>
     <string name="lyric_enhancement_cache_empty">暂无缓存</string>
     <string name="lyric_enhancement_cache_retry">重新读取</string>
     <string name="lyric_enhancement_cache_unknown_artist">未知歌手</string>
+    <string name="lyric_enhancement_cache_unknown_value">未知</string>
     <string name="title_lyric_enhancement_cache_delete_entry">删除缓存</string>
     <string name="title_lyric_enhancement_cache_clear_all">清空全部缓存</string>
     <string name="dialog_lyric_enhancement_cache_clear_entry_summary">确定删除“%1$s”的缓存吗？</string>
