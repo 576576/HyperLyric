@@ -62,6 +62,33 @@ internal object StatusBarLyricHostRegistry {
         return live
     }
 
+    fun registerNotificationIconContainer(root: ViewGroup, iconContainer: View) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { registerNotificationIconContainer(root, iconContainer) }
+            return
+        }
+        var host = root.getTag(R.id.hyperlyric_status_bar_lyric_host)
+                as? StatusBarLyricHost
+        if (host == null) {
+            registerInflatedRoot(root)
+            host = root.getTag(R.id.hyperlyric_status_bar_lyric_host)
+                    as? StatusBarLyricHost
+        }
+        host?.attachNotificationIconContainer(iconContainer)
+    }
+
+    fun onNotificationIconNativeVisibilityRequested(view: View, visibility: Int) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post {
+                onNotificationIconNativeVisibilityRequested(view, visibility)
+            }
+            return
+        }
+        liveHosts().forEach { host ->
+            host.onNotificationIconContainerNativeVisibilityRequested(view, visibility)
+        }
+    }
+
     fun enforceManagedClockVisibility(clock: View, systemVisibility: Int? = null) {
         if (Looper.myLooper() != Looper.getMainLooper()) {
             mainHandler.post { enforceManagedClockVisibility(clock, systemVisibility) }

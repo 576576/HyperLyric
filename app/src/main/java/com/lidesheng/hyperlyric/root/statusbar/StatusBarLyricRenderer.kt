@@ -50,11 +50,13 @@ internal object StatusBarLyricRenderer {
             if (prefs == null) {
                 renderingEnabled = false
                 refreshClockVisibility(null)
+                refreshNotificationIconVisibility(null)
                 refreshIslandSuppressionPolicy(null)
                 clearOnMain()
                 return@dispatchLatest
             }
             refreshClockVisibility(prefs)
+            refreshNotificationIconVisibility(prefs)
             refreshIslandSuppressionPolicy(prefs)
             StatusBarLyricIslandRegionDispatcher.updateAdjustmentEnabled(
                 prefs.getBoolean(
@@ -223,6 +225,7 @@ internal object StatusBarLyricRenderer {
 
         val prefs = HookEntry.instance?.prefs
         refreshClockVisibility(prefs)
+        refreshNotificationIconVisibility(prefs)
         refreshIslandSuppressionPolicy(prefs)
         if (prefs == null ||
             !LyricTypePreference.isEnabled(prefs, RootConstants.LYRIC_TYPE_STATUS_BAR)
@@ -250,7 +253,10 @@ internal object StatusBarLyricRenderer {
         val generation = renderGeneration.incrementAndGet()
         runOnMain {
             if (generation != renderGeneration.get()) return@runOnMain
-            StatusBarLyricHostRegistry.liveHosts().forEach { it.setClockHidden(false) }
+            StatusBarLyricHostRegistry.liveHosts().forEach { host ->
+                host.setClockHidden(false)
+                host.setNotificationIconContainerHidden(false)
+            }
             clearOnMain()
         }
     }
@@ -267,7 +273,10 @@ internal object StatusBarLyricRenderer {
             null,
         )
         StatusBarLyricIslandRegionDispatcher.updateLyricsVisible(false)
-        StatusBarLyricHostRegistry.liveHosts().forEach { it.setClockHidden(false) }
+        StatusBarLyricHostRegistry.liveHosts().forEach { host ->
+            host.setClockHidden(false)
+            host.setNotificationIconContainerHidden(false)
+        }
         removeKeyguardStateListener()
         return StatusBarLyricHostRegistry.prepareForHotReload()
     }
@@ -293,7 +302,10 @@ internal object StatusBarLyricRenderer {
             null,
         )
         StatusBarLyricIslandRegionDispatcher.updateLyricsVisible(false)
-        StatusBarLyricHostRegistry.liveHosts().forEach { it.setClockHidden(false) }
+        StatusBarLyricHostRegistry.liveHosts().forEach { host ->
+            host.setClockHidden(false)
+            host.setNotificationIconContainerHidden(false)
+        }
         removeKeyguardStateListener()
         StatusBarLyricHostRegistry.cleanupForHotReload()
     }
@@ -371,6 +383,30 @@ internal object StatusBarLyricRenderer {
         }
     }
 
+    private fun refreshNotificationIconVisibility(prefs: android.content.SharedPreferences?) {
+        runOnMain {
+            val enabled = prefs != null && LyricTypePreference.isEnabled(
+                prefs,
+                RootConstants.LYRIC_TYPE_STATUS_BAR,
+            )
+            val behavior = prefs?.getInt(
+                RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_NOTIFICATION_ICON_HIDE_BEHAVIOR,
+                RootConstants.DEFAULT_HOOK_STATUS_BAR_LYRIC_NOTIFICATION_ICON_HIDE_BEHAVIOR,
+            )?.coerceIn(
+                RootConstants.STATUS_BAR_LYRIC_NOTIFICATION_ICON_HIDE_NONE,
+                RootConstants.STATUS_BAR_LYRIC_NOTIFICATION_ICON_HIDE_WHILE_PLAYING,
+            ) ?: RootConstants.STATUS_BAR_LYRIC_NOTIFICATION_ICON_HIDE_NONE
+            val shouldHide = enabled &&
+                    behavior == RootConstants.STATUS_BAR_LYRIC_NOTIFICATION_ICON_HIDE_WHILE_PLAYING &&
+                    LyriconDataBridge.isPlaybackActive() &&
+                    LyriconDataBridge.hasLyricsForPresentation() &&
+                    !lyricTemporarilyHidden
+            StatusBarLyricHostRegistry.liveHosts().forEach { host ->
+                host.setNotificationIconContainerHidden(shouldHide)
+            }
+        }
+    }
+
     private fun refreshIslandSuppressionPolicy(prefs: android.content.SharedPreferences?) {
         val enabled = prefs != null && LyricTypePreference.isEnabled(
             prefs,
@@ -439,6 +475,7 @@ internal object StatusBarLyricRenderer {
         }
         publishRenderedLyricState()
         refreshClockVisibility(HookEntry.instance?.prefs)
+        refreshNotificationIconVisibility(HookEntry.instance?.prefs)
     }
 
     private fun clearTemporaryGestureOverrides() {

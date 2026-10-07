@@ -38,6 +38,10 @@ internal class StatusBarLyricHost(
     private val rootReference = WeakReference(root)
     private var clockReference = WeakReference(clock)
     private var parentReference = WeakReference(parent)
+    private var notificationIconContainerReference: WeakReference<View>? = null
+    private var notificationIconContainerNativeVisibility: Int? = null
+    private var shouldHideNotificationIconContainer = false
+    private var didHideNotificationIconContainer = false
     private var container: MaxWidthFrameLayout? = null
     private var contentRow: LinearLayout? = null
     private var iconView: ImageView? = null
@@ -102,6 +106,55 @@ internal class StatusBarLyricHost(
     fun managesClockVisibility(view: View): Boolean =
         clockReference.get() === view && shouldKeepClockHidden
 
+    fun attachNotificationIconContainer(view: View) {
+        if (notificationIconContainerReference?.get() === view) {
+            setNotificationIconContainerHidden(shouldHideNotificationIconContainer)
+            return
+        }
+        val shouldHide = shouldHideNotificationIconContainer
+        releaseNotificationIconContainer()
+        notificationIconContainerReference = WeakReference(view)
+        notificationIconContainerNativeVisibility = view.visibility
+        setNotificationIconContainerHidden(shouldHide)
+    }
+
+    /** Applies the lyric policy only to a container that SystemUI currently wants visible. */
+    fun setNotificationIconContainerHidden(shouldHide: Boolean) {
+        shouldHideNotificationIconContainer = shouldHide
+        val iconContainer = notificationIconContainerReference?.get() ?: return
+        if (!shouldHide) {
+            restoreNotificationIconContainerVisibility()
+            return
+        }
+        if (notificationIconContainerNativeVisibility == View.VISIBLE &&
+            iconContainer.visibility == View.VISIBLE
+        ) {
+            didHideNotificationIconContainer = true
+            iconContainer.visibility = View.INVISIBLE
+        } else if (didHideNotificationIconContainer &&
+            iconContainer.visibility != View.INVISIBLE
+        ) {
+            // A native visibility change outside the normal show/hide path took ownership.
+            didHideNotificationIconContainer = false
+        }
+    }
+
+    /** Receives the target state after SystemUI's own show/hide method has run. */
+    fun onNotificationIconContainerNativeVisibilityRequested(
+        view: View,
+        visibility: Int,
+    ) {
+        if (notificationIconContainerReference?.get() !== view) return
+        notificationIconContainerNativeVisibility = visibility
+        didHideNotificationIconContainer = false
+        if (visibility == View.VISIBLE && shouldHideNotificationIconContainer &&
+            view.visibility == View.VISIBLE
+        ) {
+            didHideNotificationIconContainer = true
+            view.visibility = View.INVISIBLE
+        }
+    }
+
     /** Reasserts only this host's Clock after SystemUI recalculates its native visibility. */
     fun enforceManagedClockVisibility(view: View, systemVisibility: Int? = null) {
         if (clockReference.get() !== view || !shouldKeepClockHidden) return
@@ -126,17 +179,20 @@ internal class StatusBarLyricHost(
         val lyricPrefs = StatusBarLyricPreferences.scoped(prefs)
         if (root.id != statusBarId || root.findViewById<View>(clockId) == null) {
             setClockHidden(false)
+            setNotificationIconContainerHidden(false)
             clearLyrics()
             return
         }
 
         val clock = root.findViewById<View>(clockId) ?: run {
             setClockHidden(false)
+            setNotificationIconContainerHidden(false)
             clearLyrics()
             return
         }
         val parent = clock.parent as? ViewGroup ?: run {
             setClockHidden(false)
+            setNotificationIconContainerHidden(false)
             clearLyrics()
             return
         }
@@ -307,6 +363,7 @@ internal class StatusBarLyricHost(
 
     fun releaseForHotReload() {
         setClockHidden(false)
+        releaseNotificationIconContainer()
         clearLyrics()
         releaseClockGestureController()
         rootReference.get()?.let { root ->
@@ -597,6 +654,24 @@ internal class StatusBarLyricHost(
         }
         managedClockReference = null
         managedClockOriginalVisibility = null
+    }
+
+    private fun restoreNotificationIconContainerVisibility() {
+        val iconContainer = notificationIconContainerReference?.get()
+        if (didHideNotificationIconContainer &&
+            notificationIconContainerNativeVisibility == View.VISIBLE &&
+            iconContainer?.visibility == View.INVISIBLE
+        ) {
+            iconContainer.visibility = View.VISIBLE
+        }
+        didHideNotificationIconContainer = false
+    }
+
+    private fun releaseNotificationIconContainer() {
+        shouldHideNotificationIconContainer = false
+        restoreNotificationIconContainerVisibility()
+        notificationIconContainerReference = null
+        notificationIconContainerNativeVisibility = null
     }
 
     private fun isRenderable(line: IRichLyricLine?): Boolean =

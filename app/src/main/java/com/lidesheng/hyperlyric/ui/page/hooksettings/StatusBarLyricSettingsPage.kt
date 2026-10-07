@@ -169,6 +169,17 @@ fun StatusBarLyricSettingsPage() {
             )
         )
     }
+    var notificationIconHideBehavior by remember(prefs) {
+        mutableIntStateOf(
+            prefs.getInt(
+                RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_NOTIFICATION_ICON_HIDE_BEHAVIOR,
+                RootConstants.DEFAULT_HOOK_STATUS_BAR_LYRIC_NOTIFICATION_ICON_HIDE_BEHAVIOR,
+            ).coerceIn(
+                RootConstants.STATUS_BAR_LYRIC_NOTIFICATION_ICON_HIDE_NONE,
+                RootConstants.STATUS_BAR_LYRIC_NOTIFICATION_ICON_HIDE_WHILE_PLAYING,
+            )
+        )
+    }
     var adjustWidthForSuperIsland by remember(prefs) {
         mutableStateOf(
             prefs.getBoolean(
@@ -344,6 +355,14 @@ fun StatusBarLyricSettingsPage() {
                         clockHideBehavior = behavior
                         saveConfig(
                             RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_CLOCK_HIDE_BEHAVIOR,
+                            behavior,
+                        )
+                    },
+                    notificationIconHideBehavior = notificationIconHideBehavior,
+                    onNotificationIconHideBehaviorChange = { behavior ->
+                        notificationIconHideBehavior = behavior
+                        saveConfig(
+                            RootConstants.KEY_HOOK_STATUS_BAR_LYRIC_NOTIFICATION_ICON_HIDE_BEHAVIOR,
                             behavior,
                         )
                     },
@@ -671,6 +690,8 @@ private fun statusBarLyricLayoutSections(
 private fun statusBarLyricVisibilitySections(
     clockHideBehavior: Int,
     onClockHideBehaviorChange: (Int) -> Unit,
+    notificationIconHideBehavior: Int,
+    onNotificationIconHideBehaviorChange: (Int) -> Unit,
     islandHideBehavior: Int,
     onIslandHideBehaviorChange: (Int) -> Unit,
     hideOnLockScreen: Boolean,
@@ -693,6 +714,15 @@ private fun statusBarLyricVisibilitySections(
                 ),
                 selectedIndex = clockHideBehavior,
                 onSelectedIndexChange = onClockHideBehaviorChange,
+            )
+            OverlayDropdownPreference(
+                title = stringResource(R.string.title_status_bar_lyric_notification_icon_hide_behavior),
+                items = listOf(
+                    stringResource(R.string.option_status_bar_lyric_notification_icon_hide_none),
+                    stringResource(R.string.option_status_bar_lyric_notification_icon_hide_playing),
+                ),
+                selectedIndex = notificationIconHideBehavior,
+                onSelectedIndexChange = onNotificationIconHideBehaviorChange,
             )
             OverlayDropdownPreference(
                 title = stringResource(R.string.title_status_bar_lyric_island_hide_behavior),
