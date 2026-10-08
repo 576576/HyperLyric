@@ -13,8 +13,8 @@ android {
         applicationId = "com.lidesheng.hyperlyric"
         minSdk = 33
         targetSdk = 37
-        versionCode = 1940
-        versionName = "7.7"
+        versionCode = 1941
+        versionName = "7.8"
 
         ndk {
             abiFilters.add("arm64-v8a")
