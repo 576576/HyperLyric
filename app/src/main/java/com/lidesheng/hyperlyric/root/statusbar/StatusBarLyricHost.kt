@@ -52,6 +52,7 @@ internal class StatusBarLyricHost(
     private var clockGestureReference: WeakReference<View>? = null
     private var managedClockReference: WeakReference<View>? = null
     private var managedClockOriginalVisibility: Int? = null
+    private val managedDateVisibilities = mutableMapOf<View, Int>()
     private var shouldKeepClockHidden = false
     private var lyricTemporarilyHidden = false
     private var layoutConfig: StatusBarLyricLayoutConfig? = null
@@ -581,6 +582,7 @@ internal class StatusBarLyricHost(
         if (clockReference.get() === clock) return
         releaseClockGestureController()
         restoreClockVisibility()
+        restoreDateVisibility()
         clockReference = WeakReference(clock)
         attachClockGestureController(clock)
     }
@@ -622,14 +624,17 @@ internal class StatusBarLyricHost(
         val root = rootReference.get()
         val clock = clockReference.get() ?: run {
             restoreClockVisibility()
+            restoreDateVisibility()
             return
         }
         if (root?.findViewById<View>(clockId) !== clock) {
             restoreClockVisibility()
+            restoreDateVisibility()
             return
         }
         if (!shouldHide) {
             restoreClockVisibility()
+            restoreDateVisibility()
             return
         }
 
@@ -643,6 +648,7 @@ internal class StatusBarLyricHost(
             managedClockOriginalVisibility = clock.visibility
         }
         if (clock.visibility != View.GONE) clock.visibility = View.GONE
+        updateDateVisibility(root, clock)
     }
 
     private fun restoreClockVisibility() {
@@ -654,6 +660,59 @@ internal class StatusBarLyricHost(
         }
         managedClockReference = null
         managedClockOriginalVisibility = null
+    }
+
+    /** Pad status bars can render the date beside the clock as a separate sibling view. */
+    private fun updateDateVisibility(root: ViewGroup, clock: View) {
+        val configuration = root.resources.configuration
+        val isPadOrWideScreen = configuration.smallestScreenWidthDp >= 600 ||
+                configuration.screenWidthDp >= 840
+        val parent = clock.parent as? ViewGroup
+        val dateViews = if (isPadOrWideScreen && parent != null) {
+            (0 until parent.childCount).asSequence()
+                .map(parent::getChildAt)
+                .filter { it !== clock }
+                .flatMap { sibling -> sibling.descendantsAndSelf() }
+                .filter { view ->
+                    val entryName = runCatching {
+                        if (view.id == View.NO_ID) "" else
+                            root.resources.getResourceEntryName(view.id)
+                    }.getOrDefault("")
+                    entryName.contains("date", ignoreCase = true) ||
+                            view.javaClass.simpleName.contains("DateView", ignoreCase = true)
+                }
+                .toSet()
+        } else {
+            emptySet()
+        }
+
+        (managedDateVisibilities.keys - dateViews).forEach { view ->
+            managedDateVisibilities.remove(view)?.let { original ->
+                if (view.visibility == View.GONE) view.visibility = original
+            }
+        }
+        dateViews.forEach { view ->
+            if (!managedDateVisibilities.containsKey(view)) {
+                managedDateVisibilities[view] = view.visibility
+            }
+            if (view.visibility != View.GONE) view.visibility = View.GONE
+        }
+    }
+
+    private fun restoreDateVisibility() {
+        managedDateVisibilities.forEach { (view, original) ->
+            if (view.visibility == View.GONE) view.visibility = original
+        }
+        managedDateVisibilities.clear()
+    }
+
+    private fun View.descendantsAndSelf(): Sequence<View> = sequence {
+        yield(this@descendantsAndSelf)
+        (this@descendantsAndSelf as? ViewGroup)?.let { group ->
+            for (index in 0 until group.childCount) {
+                yieldAll(group.getChildAt(index).descendantsAndSelf())
+            }
+        }
     }
 
     private fun restoreNotificationIconContainerVisibility() {
