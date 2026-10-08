@@ -1,0 +1,145 @@
+name: Nightly Build
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-build
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  build_and_upload:
+    name: Build and Upload Nightly APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 拉取代码 Checkout
+        uses: actions/checkout@v7
+
+      - name: 读取版本和构建标识 Read Version and Build Metadata
+        id: metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION_NAME="$(sed -n 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n 1)"
+          VERSION_CODE="$(sed -n 's/^[[:space:]]*versionCode[[:space:]]*=[[:space:]]*\([0-9][0-9]*\).*/\1/p' app/build.gradle.kts | head -n 1)"
+          SHORT_SHA="$(git rev-parse --short=7 HEAD)"
+
+          if [[ -z "$VERSION_NAME" || -z "$VERSION_CODE" ]]; then
+            echo '::error::无法从 app/build.gradle.kts 读取 versionName 或 versionCode'
+            exit 1
+          fi
+
+          if [[ ! "$VERSION_NAME" =~ ^[0-9A-Za-z][0-9A-Za-z._-]*$ ]]; then
+            echo "::error::versionName 含有不能用于 Artifact 名称的字符: $VERSION_NAME"
+            exit 1
+          fi
+
+          {
+            echo "version_name=$VERSION_NAME"
+            echo "version_code=$VERSION_CODE"
+            echo "short_sha=$SHORT_SHA"
+            echo "artifact_name=HyperLyric-${VERSION_CODE}-${VERSION_NAME}-${SHORT_SHA}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: 安装 JDK Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: 安装 Android SDK Setup Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platforms;android-37.0 build-tools;36.0.0 platform-tools'
+
+      - name: 配置 Gradle Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: wrapper
+          cache-read-only: false
+
+      - name: 授权脚本 Grant Permission
+        run: chmod +x ./gradlew
+
+      - name: 检查签名密钥 Check Signing Secrets
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          STORE_PASS: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_PASS: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ALIAS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for required in SIGNING_KEY STORE_PASS KEY_PASS KEY_ALIAS; do
+            if [[ -z "${!required:-}" ]]; then
+              echo "::error::缺少 $required secret"
+              exit 1
+            fi
+          done
+
+      - name: 构建 Nightly APK Build
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./gradlew assembleRelease --build-cache
+
+      - name: 对齐、签名并校验 APK Sign and Verify APK
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          STORE_PASS: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_PASS: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ALIAS }}
+          VERSION_TAG: ${{ steps.metadata.outputs.artifact_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+
+          BTDIR="$ANDROID_SDK_ROOT/build-tools/36.0.0"
+          ZIPALIGN="$BTDIR/zipalign"
+          APKSIGNER="$BTDIR/apksigner"
+          KEYSTORE_PATH="$RUNNER_TEMP/hyperlyric-nightly-release.jks"
+
+          printf '%s' "$SIGNING_KEY" | base64 --decode > "$KEYSTORE_PATH"
+
+          mapfile -t APK_FILES < <(find app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' -print | sort)
+          if [[ "${#APK_FILES[@]}" -ne 1 ]]; then
+            echo "::error::HyperLyric APK 数量不是 1，实际为 ${#APK_FILES[@]}"
+            printf '%s\n' "${APK_FILES[@]}"
+            exit 1
+          fi
+
+          APK_ALIGNED="$RUNNER_TEMP/hyperlyric-nightly-aligned.apk"
+          APK_OUT="$GITHUB_WORKSPACE/HyperLyric-${VERSION_TAG}.apk"
+
+          "$ZIPALIGN" -v -p 4 "${APK_FILES[0]}" "$APK_ALIGNED"
+          "$APKSIGNER" sign \
+            --ks "$KEYSTORE_PATH" \
+            --ks-pass env:STORE_PASS \
+            --ks-key-alias "$KEY_ALIAS" \
+            --key-pass env:KEY_PASS \
+            --out "$APK_OUT" \
+            "$APK_ALIGNED"
+
+          "$APKSIGNER" verify --verbose "$APK_OUT"
+
+      - name: 上传 Nightly APK Artifact Upload Nightly APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.metadata.outputs.artifact_name }}
+          path: HyperLyric-${{ steps.metadata.outputs.artifact_name }}.apk
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: 清理临时签名文件 Cleanup Signing Files
+        if: always()
+        shell: bash
+        run: |
+          rm -f "$RUNNER_TEMP/hyperlyric-nightly-release.jks"
+          rm -f "$RUNNER_TEMP/hyperlyric-nightly-aligned.apk"
