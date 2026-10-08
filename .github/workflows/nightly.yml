@@ -67,46 +67,18 @@ jobs:
       - name: 授权脚本 Grant Permission
         run: chmod +x ./gradlew
 
-      - name: 检查签名密钥 Check Signing Secrets
-        env:
-          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-          STORE_PASS: ${{ secrets.KEY_STORE_PASSWORD }}
-          KEY_PASS: ${{ secrets.KEY_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ALIAS }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          for required in SIGNING_KEY STORE_PASS KEY_PASS KEY_ALIAS; do
-            if [[ -z "${!required:-}" ]]; then
-              echo "::error::缺少 $required secret"
-              exit 1
-            fi
-          done
-
       - name: 构建 Nightly APK Build
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: ./gradlew assembleRelease --build-cache
 
-      - name: 对齐、签名并校验 APK Sign and Verify APK
+      - name: 准备未签名 APK Prepare Unsigned APK
         env:
-          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-          STORE_PASS: ${{ secrets.KEY_STORE_PASSWORD }}
-          KEY_PASS: ${{ secrets.KEY_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ALIAS }}
-          VERSION_TAG: ${{ steps.metadata.outputs.artifact_name }}
+          ARTIFACT_NAME: ${{ steps.metadata.outputs.artifact_name }}
         shell: bash
         run: |
           set -euo pipefail
-          umask 077
-
-          BTDIR="$ANDROID_SDK_ROOT/build-tools/36.0.0"
-          ZIPALIGN="$BTDIR/zipalign"
-          APKSIGNER="$BTDIR/apksigner"
-          KEYSTORE_PATH="$RUNNER_TEMP/hyperlyric-nightly-release.jks"
-
-          printf '%s' "$SIGNING_KEY" | base64 --decode > "$KEYSTORE_PATH"
 
           mapfile -t APK_FILES < <(find app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' -print | sort)
           if [[ "${#APK_FILES[@]}" -ne 1 ]]; then
@@ -115,31 +87,12 @@ jobs:
             exit 1
           fi
 
-          APK_ALIGNED="$RUNNER_TEMP/hyperlyric-nightly-aligned.apk"
-          APK_OUT="$GITHUB_WORKSPACE/HyperLyric-${VERSION_TAG}.apk"
-
-          "$ZIPALIGN" -v -p 4 "${APK_FILES[0]}" "$APK_ALIGNED"
-          "$APKSIGNER" sign \
-            --ks "$KEYSTORE_PATH" \
-            --ks-pass env:STORE_PASS \
-            --ks-key-alias "$KEY_ALIAS" \
-            --key-pass env:KEY_PASS \
-            --out "$APK_OUT" \
-            "$APK_ALIGNED"
-
-          "$APKSIGNER" verify --verbose "$APK_OUT"
+          cp "${APK_FILES[0]}" "$GITHUB_WORKSPACE/HyperLyric-${ARTIFACT_NAME}-unsigned.apk"
 
       - name: 上传 Nightly APK Artifact Upload Nightly APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.metadata.outputs.artifact_name }}
-          path: HyperLyric-${{ steps.metadata.outputs.artifact_name }}.apk
+          path: HyperLyric-${{ steps.metadata.outputs.artifact_name }}-unsigned.apk
           if-no-files-found: error
           retention-days: 7
-
-      - name: 清理临时签名文件 Cleanup Signing Files
-        if: always()
-        shell: bash
-        run: |
-          rm -f "$RUNNER_TEMP/hyperlyric-nightly-release.jks"
-          rm -f "$RUNNER_TEMP/hyperlyric-nightly-aligned.apk"
