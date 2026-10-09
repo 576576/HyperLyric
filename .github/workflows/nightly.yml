@@ -48,7 +48,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: 安装 JDK Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
@@ -102,7 +102,7 @@ jobs:
           cp "${APK_FILES[0]}" "$GITHUB_WORKSPACE/HyperLyric-${ARTIFACT_NAME}-pr.apk"
 
       - name: 上传 Nightly APK Artifact Upload Nightly APK Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.metadata.outputs.artifact_name }}
           path: HyperLyric-${{ steps.metadata.outputs.artifact_name }}-pr.apk
