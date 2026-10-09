@@ -10,6 +10,8 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.TextView
+import android.util.TypedValue
 import com.lidesheng.hyperlyric.R
 import com.lidesheng.hyperlyric.common.RootConstants
 import com.lidesheng.hyperlyric.common.StatusBarLyricPreferences
@@ -52,7 +54,8 @@ internal class StatusBarLyricHost(
     private var clockGestureReference: WeakReference<View>? = null
     private var managedClockReference: WeakReference<View>? = null
     private var managedClockOriginalVisibility: Int? = null
-    private val managedDateVisibilities = mutableMapOf<View, Int>()
+    private var managedPadClockReference: WeakReference<TextView>? = null
+    private var managedPadClockStyle: PadClockStyle? = null
     private var shouldKeepClockHidden = false
     private var lyricTemporarilyHidden = false
     private var layoutConfig: StatusBarLyricLayoutConfig? = null
@@ -582,7 +585,7 @@ internal class StatusBarLyricHost(
         if (clockReference.get() === clock) return
         releaseClockGestureController()
         restoreClockVisibility()
-        restoreDateVisibility()
+        restorePadClockStyle()
         clockReference = WeakReference(clock)
         attachClockGestureController(clock)
     }
@@ -624,23 +627,24 @@ internal class StatusBarLyricHost(
         val root = rootReference.get()
         val clock = clockReference.get() ?: run {
             restoreClockVisibility()
-            restoreDateVisibility()
+            restorePadClockStyle()
             return
         }
         if (root?.findViewById<View>(clockId) !== clock) {
             restoreClockVisibility()
-            restoreDateVisibility()
+            restorePadClockStyle()
             return
         }
         if (!shouldHide) {
             restoreClockVisibility()
-            restoreDateVisibility()
+            restorePadClockStyle()
             return
         }
 
         val managedClock = managedClockReference?.get()
         if (managedClock !== clock) {
             restoreClockVisibility()
+            shouldKeepClockHidden = true
             managedClockReference = WeakReference(clock)
             managedClockOriginalVisibility = clock.visibility
         } else if (clock.visibility != View.GONE) {
@@ -648,7 +652,7 @@ internal class StatusBarLyricHost(
             managedClockOriginalVisibility = clock.visibility
         }
         if (clock.visibility != View.GONE) clock.visibility = View.GONE
-        updateDateVisibility(root, clock)
+        updatePadClockStyle(root)
     }
 
     private fun restoreClockVisibility() {
@@ -662,56 +666,62 @@ internal class StatusBarLyricHost(
         managedClockOriginalVisibility = null
     }
 
-    /** Pad status bars can render the date beside the clock as a separate sibling view. */
-    private fun updateDateVisibility(root: ViewGroup, clock: View) {
-        val configuration = root.resources.configuration
-        val isPadOrWideScreen = configuration.smallestScreenWidthDp >= 600 ||
-                configuration.screenWidthDp >= 840
-        val parent = clock.parent as? ViewGroup
-        val dateViews = if (isPadOrWideScreen && parent != null) {
-            (0 until parent.childCount).asSequence()
-                .map(parent::getChildAt)
-                .filter { it !== clock }
-                .flatMap { sibling -> sibling.descendantsAndSelf() }
-                .filter { view ->
-                    val entryName = runCatching {
-                        if (view.id == View.NO_ID) "" else
-                            root.resources.getResourceEntryName(view.id)
-                    }.getOrDefault("")
-                    entryName.contains("date", ignoreCase = true) ||
-                            view.javaClass.simpleName.contains("DateView", ignoreCase = true)
-                }
-                .toSet()
-        } else {
-            emptySet()
+    /** HyperOS Pad status bars use a dedicated `pad_clock` TextView for the date and time. */
+    private fun updatePadClockStyle(root: ViewGroup) {
+        val padClockId = root.resources.getIdentifier("pad_clock", "id", "com.android.systemui")
+        val padClock = if (padClockId == 0) null else root.findViewById<View>(padClockId) as? TextView
+        if (padClock == null) {
+            restorePadClockStyle()
+            return
         }
 
-        (managedDateVisibilities.keys - dateViews).forEach { view ->
-            managedDateVisibilities.remove(view)?.let { original ->
-                if (view.visibility == View.GONE) view.visibility = original
-            }
+        if (managedPadClockReference?.get() !== padClock) {
+            restorePadClockStyle()
+            managedPadClockReference = WeakReference(padClock)
+            managedPadClockStyle = PadClockStyle.capture(padClock)
         }
-        dateViews.forEach { view ->
-            if (!managedDateVisibilities.containsKey(view)) {
-                managedDateVisibilities[view] = view.visibility
-            }
-            if (view.visibility != View.GONE) view.visibility = View.GONE
-        }
+        padClock.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 0f)
+        padClock.setPaddingRelative(1, 0, 0, 0)
     }
 
-    private fun restoreDateVisibility() {
-        managedDateVisibilities.forEach { (view, original) ->
-            if (view.visibility == View.GONE) view.visibility = original
-        }
-        managedDateVisibilities.clear()
+    private fun restorePadClockStyle() {
+        val view = managedPadClockReference?.get()
+        managedPadClockStyle?.restore(view)
+        managedPadClockReference = null
+        managedPadClockStyle = null
     }
 
-    private fun View.descendantsAndSelf(): Sequence<View> = sequence {
-        yield(this@descendantsAndSelf)
-        (this@descendantsAndSelf as? ViewGroup)?.let { group ->
-            for (index in 0 until group.childCount) {
-                yieldAll(group.getChildAt(index).descendantsAndSelf())
+    private data class PadClockStyle(
+        val textSizePx: Float,
+        val paddingTop: Int,
+        val paddingBottom: Int,
+        val paddingRelative: Boolean,
+        val paddingLeft: Int,
+        val paddingRight: Int,
+        val paddingStart: Int,
+        val paddingEnd: Int,
+    ) {
+        fun restore(view: TextView?) {
+            if (view == null) return
+            view.setTextSize(TypedValue.COMPLEX_UNIT_PX, textSizePx)
+            if (paddingRelative) {
+                view.setPaddingRelative(paddingStart, paddingTop, paddingEnd, paddingBottom)
+            } else {
+                view.setPadding(paddingLeft, paddingTop, paddingRight, paddingBottom)
             }
+        }
+
+        companion object {
+            fun capture(view: TextView) = PadClockStyle(
+                textSizePx = view.textSize,
+                paddingTop = view.paddingTop,
+                paddingBottom = view.paddingBottom,
+                paddingRelative = view.isPaddingRelative,
+                paddingLeft = view.paddingLeft,
+                paddingRight = view.paddingRight,
+                paddingStart = view.paddingStart,
+                paddingEnd = view.paddingEnd,
+            )
         }
     }
 
