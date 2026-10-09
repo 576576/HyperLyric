@@ -67,13 +67,25 @@ jobs:
       - name: 授权脚本 Grant Permission
         run: chmod +x ./gradlew
 
+      - name: 准备 Nightly 签名密钥 Prepare Nightly Signing Key
+        env:
+          NIGHTLY_KEYSTORE: ${{ runner.temp }}/hyperlyric-nightly-pr.jks
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' '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' | base64 --decode > "$NIGHTLY_KEYSTORE"
+
       - name: 构建 Nightly APK Build
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./gradlew assembleRelease --build-cache
+          NIGHTLY_KEYSTORE: ${{ runner.temp }}/hyperlyric-nightly-pr.jks
+          NIGHTLY_STORE_PASSWORD: HLPRnightlySigning-2026-4x7Q!p9Lm2
+          NIGHTLY_KEY_PASSWORD: HLPRnightlySigning-2026-4x7Q!p9Lm2
+          NIGHTLY_KEY_ALIAS: hyperlyric-pr
+        run: ./gradlew -PnightlyPr=true assembleRelease --build-cache
 
-      - name: 准备未签名 APK Prepare Unsigned APK
+      - name: 准备已签名 APK Prepare Signed APK
         env:
           ARTIFACT_NAME: ${{ steps.metadata.outputs.artifact_name }}
         shell: bash
@@ -87,12 +99,12 @@ jobs:
             exit 1
           fi
 
-          cp "${APK_FILES[0]}" "$GITHUB_WORKSPACE/HyperLyric-${ARTIFACT_NAME}-unsigned.apk"
+          cp "${APK_FILES[0]}" "$GITHUB_WORKSPACE/HyperLyric-${ARTIFACT_NAME}-pr.apk"
 
       - name: 上传 Nightly APK Artifact Upload Nightly APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.metadata.outputs.artifact_name }}
-          path: HyperLyric-${{ steps.metadata.outputs.artifact_name }}-unsigned.apk
+          path: HyperLyric-${{ steps.metadata.outputs.artifact_name }}-pr.apk
           if-no-files-found: error
           retention-days: 7

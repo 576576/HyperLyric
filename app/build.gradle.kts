@@ -6,11 +6,18 @@ plugins {
 
 }
 
+val nightlyPrBuild = providers.gradleProperty("nightlyPr").orNull == "true"
+
 android {
     namespace = "com.lidesheng.hyperlyric"
     compileSdk = 37
     defaultConfig {
-        applicationId = "com.lidesheng.hyperlyric"
+        applicationId = if (nightlyPrBuild) {
+            "com.lidesheng.hyperlyric.pr"
+        } else {
+            "com.lidesheng.hyperlyric"
+        }
+        manifestPlaceholders["appLabel"] = if (nightlyPrBuild) "HyperLyric PR" else "HyperLyric"
         minSdk = 33
         targetSdk = 37
         versionCode = 1941
@@ -21,10 +28,24 @@ android {
         }
     }
 
+    signingConfigs {
+        if (nightlyPrBuild) {
+            create("nightlyPr") {
+                storeFile = file(requireNotNull(System.getenv("NIGHTLY_KEYSTORE")))
+                storePassword = requireNotNull(System.getenv("NIGHTLY_STORE_PASSWORD"))
+                keyAlias = requireNotNull(System.getenv("NIGHTLY_KEY_ALIAS"))
+                keyPassword = requireNotNull(System.getenv("NIGHTLY_KEY_PASSWORD"))
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            if (nightlyPrBuild) {
+                signingConfig = signingConfigs.getByName("nightlyPr")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

@@ -17,7 +17,7 @@
 
     <application
         android:name=".root.RootApplication"
-        android:label="HyperLyric"
+        android:label="${appLabel}"
         android:description="@string/app_description"
         android:supportsRtl="true"
         android:testOnly="false"
@@ -45,7 +45,7 @@
             android:name=".launcher"
             android:targetActivity=".ui.MainActivity"
             android:exported="true"
-            android:label="HyperLyric"
+            android:label="${appLabel}"
             android:icon="@mipmap/ic_launcher"
             android:roundIcon="@mipmap/ic_launcher_round">
             <intent-filter>
