@@ -441,19 +441,29 @@ internal class StatusBarLyricHost(
 
         val oldParent = wrapper.parent as? ViewGroup
         if (oldParent !== parent) oldParent?.removeView(wrapper)
-        val clockIndex = parent.indexOfChild(clock)
-        val wrapperIndex = parent.indexOfChild(wrapper)
+        val anchors = buildList {
+            add(clock)
+            findPadClock(root)?.let { padClock ->
+                directChildWithin(parent, padClock)?.let { add(it) }
+            }
+        }.distinct()
         val shouldBeBeforeClock = insertionOrder ==
                 RootConstants.STATUS_BAR_LYRIC_INSERTION_BEFORE_CLOCK
-        val alreadyInPosition = wrapperIndex >= 0 && clockIndex >= 0 &&
-                if (shouldBeBeforeClock) wrapperIndex < clockIndex else wrapperIndex > clockIndex
-        if (!alreadyInPosition && clockIndex >= 0) {
+        val anchorIndices = anchors.map(parent::indexOfChild).filter { it >= 0 }
+        val wrapperIndex = parent.indexOfChild(wrapper)
+        val firstAnchorIndex = anchorIndices.minOrNull()
+        val lastAnchorIndex = anchorIndices.maxOrNull()
+        val alreadyInPosition = wrapperIndex >= 0 && firstAnchorIndex != null &&
+                lastAnchorIndex != null &&
+                (if (shouldBeBeforeClock) wrapperIndex < firstAnchorIndex
+                else wrapperIndex > lastAnchorIndex)
+        if (!alreadyInPosition && firstAnchorIndex != null && lastAnchorIndex != null) {
             if (wrapperIndex >= 0) parent.removeView(wrapper)
-            val updatedClockIndex = parent.indexOfChild(clock)
+            val updatedAnchorIndices = anchors.map(parent::indexOfChild).filter { it >= 0 }
             val targetIndex = if (shouldBeBeforeClock) {
-                updatedClockIndex
+                updatedAnchorIndices.minOrNull() ?: parent.childCount
             } else {
-                updatedClockIndex + 1
+                (updatedAnchorIndices.maxOrNull() ?: (parent.childCount - 1)) + 1
             }
             parent.addView(
                 wrapper,
@@ -668,8 +678,7 @@ internal class StatusBarLyricHost(
 
     /** HyperOS Pad status bars use a dedicated `pad_clock` TextView for the date and time. */
     private fun updatePadClockStyle(root: ViewGroup) {
-        val padClockId = root.resources.getIdentifier("pad_clock", "id", "com.android.systemui")
-        val padClock = if (padClockId == 0) null else root.findViewById<View>(padClockId) as? TextView
+        val padClock = findPadClock(root)
         if (padClock == null) {
             restorePadClockStyle()
             return
@@ -682,6 +691,19 @@ internal class StatusBarLyricHost(
         }
         padClock.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 0f)
         padClock.setPaddingRelative(1, 0, 0, 0)
+    }
+
+    private fun findPadClock(root: ViewGroup): TextView? {
+        val padClockId = root.resources.getIdentifier("pad_clock", "id", "com.android.systemui")
+        return if (padClockId == 0) null else root.findViewById(padClockId)
+    }
+
+    private fun directChildWithin(parent: ViewGroup, descendant: View): View? {
+        var current = descendant
+        while (current.parent !== parent) {
+            current = current.parent as? View ?: return null
+        }
+        return current
     }
 
     private fun restorePadClockStyle() {
